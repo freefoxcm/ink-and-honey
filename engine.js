@@ -9,7 +9,6 @@ const RULES = Object.freeze({
   sampleSpacing: 8,
   speed: 103,
   maxSpeed: 153,
-  impactDuration: .27,
 });
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -130,7 +129,6 @@ function repelFromInk(round, bee) {
   const radius = RULES.beeRadius + RULES.lineRadius;
   let separation = radius;
   let contact = null;
-  let segment = 0;
   for (let index = 1; index < points.length; index++) {
     const a = points[index - 1];
     const b = points[index];
@@ -141,7 +139,6 @@ function repelFromInk(round, bee) {
     if (gap < separation) {
       separation = gap;
       contact = p;
-      segment = index;
     }
   }
   if (!contact) return;
@@ -163,9 +160,8 @@ function repelFromInk(round, bee) {
   turnAlongWall(bee, nx, ny);
   if (bee.flash <= 0 && speed < -12) {
     bee.flash = 0.18;
-    flexInkAtImpact(body, segment, contact, -nx * impulse, -ny * impulse);
     round.bounces++;
-    round.effects.push({ x: contact.x, y: contact.y, nx, ny, age: 0 });
+    round.effects.push({ x: bee.x, y: bee.y, age: 0, id: bee.id });
   }
 }
 
@@ -216,7 +212,7 @@ function stepRound(round, dt = RULES.step) {
   round.time = Math.max(0, round.level.time - round.elapsed);
   stepInk(round, dt);
   for (const effect of round.effects) effect.age += dt;
-  round.effects = round.effects.filter(effect => effect.age < RULES.impactDuration);
+  round.effects = round.effects.filter(effect => effect.age < 0.39);
   for (const bee of round.bees) {
     if (bee.delay > round.elapsed) continue;
     moveBee(round, bee, dt);
@@ -235,20 +231,14 @@ function stepRound(round, dt = RULES.step) {
 }
 
 function runEngineChecks() {
-  function simulate(level, route, observe) {
+  function simulate(level, route) {
     const round = makeRound(level);
     for (const [x, y] of route) extendStroke(round, { x, y });
     launchSwarm(round);
-    for (let ticks = 0; ticks < 1200 && round.phase === "playing"; ticks++) {
-      stepRound(round);
-      observe?.(round);
-    }
+    for (let ticks = 0; ticks < 1200 && round.phase === "playing"; ticks++) stepRound(round);
     return round;
   }
-  const peakFlex = LEVELS.map(() => 0);
-  const references = LEVELS.map((level, index) => simulate(level, level.guide, round => {
-    peakFlex[index] = Math.max(peakFlex[index], round.inkBody.flex);
-  }));
+  const references = LEVELS.map(level => simulate(level, level.guide));
   const weak = LEVELS.map(level => simulate(level, [[18, 91], [58, 94]]));
   const invalid = makeRound(LEVELS[0]);
   const puppy = invalid.level.dogs[0];
@@ -277,15 +267,12 @@ function runEngineChecks() {
   }, ring);
   return {
     guidedWins: { pass: references.every(round => round.phase === "win" && round.bounces > 0), detail: references.map(round => round.phase + "/" + round.bounces + "/" + round.stars).join(", ") },
-    visibleImpact: { pass: peakFlex.every(peak => peak >= 12 && peak <= INK_PHYSICS.flexLimit),
-      detail: "Supported shields briefly bend by " + peakFlex.map(peak => Math.round(peak)).join(", ") + " px along the tutorial paths." },
     weakLosses: { pass: weak.every(round => round.phase === "loss"), detail: weak.map(round => round.phase).join(", ") },
     puppyExclusion: { pass: crossing === "puppy" && !invalid.points.length, detail: "A sampled segment crossing a puppy clears the draft stroke." },
     budgetClamp: { pass: budget.ink === budget.level.ink && budget.points.at(-1).x === budget.level.ink + 10, detail: "Fast input is trimmed to the last available unit of ink." },
     tapIsSafe: { pass: !launchSwarm(tiny) && tiny.phase === "ready", detail: "A point or short mark does not start a round." },
     fallsOntoGround: { pass: Math.abs(dropped.inkBody.y - BOARD.ground + RULES.lineRadius) < 1 &&
-        Math.abs(dropped.inkBody.vy) < 1 && dropped.inkBody.flex === 0,
-      detail: "An airborne stroke falls and comes to rest with no bending when no bees hit it." },
+        Math.abs(dropped.inkBody.vy) < 1, detail: "An airborne stroke falls and comes to rest on the grass." },
     impactOpensGap: { pass: Math.abs(standing.inkBody.angle) < .02 && Math.abs(tipped.inkBody.angle) > .5 &&
         gap > RULES.beeRadius * 2 && tipped.phase === "loss" && tipped.bounces > 0,
       detail: "Bee impacts tip a wall away from its ceiling, opening a " + Math.round(gap) + " px gap." },

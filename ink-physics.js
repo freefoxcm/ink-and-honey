@@ -3,17 +3,11 @@
 const INK_PHYSICS = Object.freeze({
   gravity: 410,
   density: .009,
-  beeMass: 1.05,
+  beeMass: .85,
   friction: .34,
   contactMargin: .4,
   penetrationSlop: .12,
   sampleSpacing: 6,
-  flexReach: 92,
-  flexLimit: 18,
-  flexStiffness: 190,
-  flexDamping: 11,
-  flexImpulse: 5.4,
-  maxFlexSpeed: 460,
 });
 
 function simplifyInk(points, start = 0, end = points.length - 1, result = [points[0]]) {
@@ -54,7 +48,7 @@ function createInkBody(points) {
   const x = centerX / length;
   const y = centerY / length;
   const shape = path.map(p => ({ x: p.x - x, y: p.y - y }));
-  const samples = [{ ...shape[0], along: 0, dx: 0, dy: 0, vx: 0, vy: 0 }];
+  const samples = [shape[0]];
   let inertia = 0;
   for (let index = 1; index < points.length; index++) {
     const a = points[index - 1];
@@ -66,7 +60,6 @@ function createInkBody(points) {
     inertia += segmentInertia * span * INK_PHYSICS.density;
   }
   let radius = 0;
-  let along = 0;
   for (let index = 1; index < shape.length; index++) {
     const a = shape[index - 1];
     const b = shape[index];
@@ -74,13 +67,8 @@ function createInkBody(points) {
     radius = Math.max(radius, Math.hypot(a.x, a.y), Math.hypot(b.x, b.y));
     const count = Math.ceil(span / INK_PHYSICS.sampleSpacing);
     for (let step = 1; step <= count; step++) {
-      const fraction = step / count;
-      samples.push({
-        x: a.x + (b.x - a.x) * fraction, y: a.y + (b.y - a.y) * fraction,
-        along: along + span * fraction, dx: 0, dy: 0, vx: 0, vy: 0,
-      });
+      samples.push({ x: a.x + (b.x - a.x) * step / count, y: a.y + (b.y - a.y) * step / count });
     }
-    along += span;
   }
 
   return {
@@ -88,7 +76,7 @@ function createInkBody(points) {
     inverseMass: 1 / (length * INK_PHYSICS.density),
     inverseInertia: 1 / inertia,
     maxSpin: Math.min(5, 780 / radius),
-    samples, path: samples.map(point => ({ x: x + point.x, y: y + point.y })), flex: 0,
+    shape, samples, path,
   };
 }
 
@@ -161,43 +149,6 @@ function inkSpeedAt(body, rx, ry, dx, dy) {
   return (body.vx - body.spin * ry) * dx + (body.vy + body.spin * rx) * dy;
 }
 
-function flexInkAtImpact(body, segment, point, impulseX, impulseY) {
-  const start = body.path[segment - 1];
-  const span = distance(start, body.path[segment]);
-  const fraction = span ? clamp(distance(start, point) / span, 0, 1) : 0;
-  const before = body.samples[segment - 1].along;
-  const along = before + (body.samples[segment].along - before) * fraction;
-  const cos = Math.cos(body.angle);
-  const sin = Math.sin(body.angle);
-  const localX = (impulseX * cos + impulseY * sin) * INK_PHYSICS.flexImpulse;
-  const localY = (-impulseX * sin + impulseY * cos) * INK_PHYSICS.flexImpulse;
-  for (const sample of body.samples) {
-    const proximity = 1 - Math.abs(sample.along - along) / INK_PHYSICS.flexReach;
-    if (proximity <= 0) continue;
-    const weight = proximity ** 2;
-    sample.vx += localX * weight;
-    sample.vy += localY * weight;
-    const speed = Math.hypot(sample.vx, sample.vy);
-    if (speed > INK_PHYSICS.maxFlexSpeed) {
-      sample.vx *= INK_PHYSICS.maxFlexSpeed / speed;
-      sample.vy *= INK_PHYSICS.maxFlexSpeed / speed;
-    }
-  }
-}
-
-function inkFlexClearance(level, x, y) {
-  // Supported points stay seated. Nearby terrain also limits the bend before it can clip into it.
-  let clearance = Math.min(BOARD.ground - y, y, x, BOARD.width - x);
-  for (const box of level.boxes) {
-    clearance = Math.min(clearance, Math.hypot(
-      x - clamp(x, box.x, box.x + box.w), y - clamp(y, box.y, box.y + box.h)));
-  }
-  for (const dog of level.dogs) {
-    clearance = Math.min(clearance, Math.hypot(x - dog.x, y - dog.y) - RULES.puppyRadius);
-  }
-  return clamp(clearance - RULES.lineRadius, 0, INK_PHYSICS.flexLimit);
-}
-
 function resolveInkTerrain(body, level) {
   for (let iteration = 0; iteration < 6; iteration++) {
     let deepest = null;
@@ -251,21 +202,8 @@ function stepInk(round, dt) {
 
   const cos = Math.cos(body.angle);
   const sin = Math.sin(body.angle);
-  const damping = Math.exp(-INK_PHYSICS.flexDamping * dt);
-  body.flex = 0;
-  for (let index = 0; index < body.samples.length; index++) {
-    const sample = body.samples[index];
-    sample.vx = (sample.vx - INK_PHYSICS.flexStiffness * sample.dx * dt) * damping;
-    sample.vy = (sample.vy - INK_PHYSICS.flexStiffness * sample.dy * dt) * damping;
-    sample.dx += sample.vx * dt;
-    sample.dy += sample.vy * dt;
-    const x = body.x + sample.x * cos - sample.y * sin;
-    const y = body.y + sample.x * sin + sample.y * cos;
-    const amplitude = Math.hypot(sample.dx, sample.dy);
-    const bend = amplitude > .015 ? Math.min(amplitude, inkFlexClearance(round.level, x, y)) : 0;
-    const fraction = bend ? bend / amplitude : 0;
-    body.path[index].x = x + (sample.dx * cos - sample.dy * sin) * fraction;
-    body.path[index].y = y + (sample.dx * sin + sample.dy * cos) * fraction;
-    body.flex = Math.max(body.flex, bend);
-  }
+  body.path = body.shape.map(p => ({
+    x: body.x + p.x * cos - p.y * sin,
+    y: body.y + p.x * sin + p.y * cos,
+  }));
 }
