@@ -72,15 +72,12 @@ function makePainter(canvas) {
 
   function earth(target, box, palette) {
     const { x, y, w, h } = box;
-    const radius = Math.min(10, h / 5);
-    path(target, "M" + x + " " + (y + 6) + "Q" + x + " " + y + " " + (x + radius) + " " + y +
-      "H" + (x + w - radius) + "Q" + (x + w) + " " + y + " " + (x + w) + " " + (y + 6) +
-      "V" + (y + h - radius) + "q0 " + radius + " -" + radius + " " + radius + "H" + (x + radius) +
-      "q-" + radius + " 0 -" + radius + " -" + radius + "Z", palette.soil);
+    target.fillStyle = palette.soil;
+    target.fillRect(x, y, w, h);
     target.fillStyle = palette.deep;
     target.fillRect(x + 6, y + h - 6, w - 12, 3);
     target.fillStyle = palette.grass;
-    target.fillRect(x + 4, y + 3, w - 8, 8);
+    target.fillRect(x, y, w, 9);
     path(target, "M" + (x + 5) + " " + (y + 4) + "h" + (w - 10), null, "#ecedb985", 2);
     const random = randomizer(x * 51 + y);
     for (let i = 0; i < w / 6; i++) {
@@ -90,7 +87,8 @@ function makePainter(canvas) {
     }
   }
 
-  function habitat(level) {
+  function habitat(round) {
+    const { level } = round;
     const palette = PALETTES[level.palette];
     const random = randomizer(31 + LEVELS.indexOf(level) * 913);
     const sky = bg.createLinearGradient(0, 0, 0, BOARD.ground);
@@ -128,12 +126,30 @@ function makePainter(canvas) {
         null, i % 3 ? "#667c5152" : "#f9f4ce78", 1.3);
       }
     }
-    for (const box of level.boxes) earth(bg, box, palette);
-    earth(bg, { x: -14, y: BOARD.ground, w: 928, h: 110 }, palette);
-    path(bg, "M0 527q60-13 127-4t168-1m52 1q53 4 123-3t176 5m30-1q100 5 224-9 M0 549 Q111 527 232 545 T500 547 T900 545", null, "#694e3b34", 2);
+    for (const pit of level.pits ?? []) {
+      const shade = bg.createLinearGradient(0, BOARD.ground, 0, pit.bottom);
+      shade.addColorStop(0, "#72584038");
+      shade.addColorStop(1, "#70533d97");
+      bg.fillStyle = shade;
+      bg.fillRect(pit.x, BOARD.ground, pit.width, pit.bottom - BOARD.ground);
+    }
+    for (const ground of round.ground) {
+      bg.fillStyle = ground.pitFloor ? palette.deep : palette.soil;
+      bg.fillRect(ground.x, ground.y, ground.w, ground.h);
+      bg.fillStyle = ground.pitFloor ? palette.soil : palette.grass;
+      bg.fillRect(ground.x, ground.y, ground.w, ground.pitFloor ? 5 : 9);
+      for (let x = ground.x + 14; x < ground.x + ground.w - 10; x += 24) {
+        const y = ground.y + 15 + random() * 52;
+        oval(bg, x, y, 1.7 + random() * 2.2, 1, "#f6df9b79", -.24);
+      }
+    }
+    for (const box of round.platforms) {
+      if (!box.travel) earth(bg, box, palette);
+    }
     for (let i = 0; i < 23; i++) {
       const x = i * 41 + random() * 30;
       if (x > 260 && x < 640) continue;
+      if (level.pits?.some(pit => x > pit.x - 8 && x < pit.x + pit.width + 8)) continue;
       flower(x, 482, .54 + random() * .45, i % 3 === 0 ? "#d08259" : "#fff6d7");
     }
     for (let i = 0; i < 19500; i++) {
@@ -259,9 +275,58 @@ function makePainter(canvas) {
     ctx.globalAlpha = 1;
   }
 
+  function movementGuides(round) {
+    ctx.save();
+    ctx.lineWidth = 2.8;
+    ctx.strokeStyle = "#3e6956aa";
+    ctx.setLineDash([5, 7]);
+    for (const dog of round.level.dogs) {
+      if (!dog.patrol) continue;
+      const start = Math.min(dog.x, dog.patrol.to);
+      const end = Math.max(dog.x, dog.patrol.to);
+      const radius = RULES.puppyRadius + RULES.lineRadius;
+      ctx.beginPath();
+      ctx.roundRect(start - radius, dog.y - radius, end - start + 2 * radius, 2 * radius, radius);
+      ctx.stroke();
+      for (let x = start; x <= end; x += 23) {
+        const y = dog.y + 24 + (Math.round((x - start) / 23) % 2 ? -5 : 0);
+        oval(ctx, x, y, 4.5, 3.3, "#43654c9e", -.24);
+        oval(ctx, x + 4.2, y - 4.4, 1.7, 1.7, "#43654c9e");
+        oval(ctx, x + 5.9, y - .9, 1.6, 1.6, "#43654c9e");
+      }
+    }
+    ctx.strokeStyle = "#596351b8";
+    ctx.setLineDash([7, 6]);
+    for (const box of round.level.boxes) {
+      if (!box.travel) continue;
+      const { dx = 0, dy = 0 } = box.travel;
+      ctx.strokeRect(Math.min(box.x, box.x + dx), Math.min(box.y, box.y + dy),
+        box.w + Math.abs(dx), box.h + Math.abs(dy));
+    }
+    ctx.restore();
+  }
+
+  function movingPlatforms(round) {
+    const palette = PALETTES[round.level.palette];
+    for (const box of round.platforms) {
+      if (!box.travel) continue;
+      ctx.save();
+      ctx.translate(box.x, box.y);
+      ctx.fillStyle = palette.soil;
+      ctx.fillRect(0, 0, box.w, box.h);
+      ctx.fillStyle = "#547662";
+      ctx.fillRect(0, 0, box.w, 6);
+      ctx.fillStyle = palette.deep;
+      ctx.fillRect(0, box.h - 4, box.w, 4);
+      oval(ctx, 7, box.h / 2 + 1, 2.2, 2.2, "#f4d294");
+      oval(ctx, box.w - 7, box.h / 2 + 1, 2.2, 2.2, "#f4d294");
+      ctx.restore();
+    }
+  }
+
   function paint(round, view) {
     if (round.level !== previousLevel) {
-      habitat(round.level);
+      habitat(round);
       previousLevel = round.level;
     }
     ctx.setTransform(canvas.width / BOARD.width, 0, 0, canvas.height / BOARD.height, 0, 0);
@@ -269,6 +334,8 @@ function makePainter(canvas) {
 
     const time = view.age;
     const moving = round.phase === "playing";
+    if (round.phase === "ready") movementGuides(round);
+    movingPlatforms(round);
     for (const [index, hive] of round.level.hives.entries()) {
       drawHive(hive, time, moving);
       if (round.phase !== "ready") continue;
@@ -276,9 +343,12 @@ function makePainter(canvas) {
       beeSprite({ x: hive.x + Math.cos(angle) * 55, y: hive.y + 8 + Math.sin(angle) * 24, vx: -Math.sin(angle), vy: 0, id: index }, time, .87);
     }
     if (round.level.wind && !motion.matches) {
+      const strength = windAt(round.level, round.elapsed);
+      const direction = strength < 0 ? -1 : 1;
       ctx.globalAlpha = .31;
       for (let i = 0; i < 4; i++) {
-        const x = ((time * (25 + i * 8) + i * 230) % 1000) - 45;
+        const offset = ((time * (25 + i * 8) + i * 230) % 1000) - 45;
+        const x = direction > 0 ? offset : BOARD.width - offset;
         const y = 110 + i * 89;
         path(ctx, "M" + x + " " + y + "q24-6 57 0m-8 7h17", null, "#fff8dd", 2);
       }
@@ -292,7 +362,7 @@ function makePainter(canvas) {
         oval(ctx, p.x, p.y, 3.2, 3.2, "#687e58");
       }
     }
-    for (const [index, dog] of round.level.dogs.entries()) {
+    for (const [index, dog] of round.dogs.entries()) {
       puppy(dog, time, round.phase, round.touched === index);
     }
     const ink = round.inkBody?.path ?? round.points;

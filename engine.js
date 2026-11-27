@@ -23,10 +23,16 @@ function nearestPoint(x, y, a, b) {
 }
 
 function makeRound(level) {
-  return {
+  const ground = groundFor(level);
+  const platforms = level.boxes.map(box => ({ ...box, vx: 0, vy: 0 }));
+  const dogs = level.dogs.map(dog => ({ ...dog, vx: 0 }));
+  const round = {
     level, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
+    ground, platforms, terrain: [...ground, ...platforms], dogs,
     time: level.time, elapsed: 0, ticks: 0, stars: 0, touched: -1, bounces: 0,
   };
+  updateScene(round);
+  return round;
 }
 
 function discardStroke(round) {
@@ -34,9 +40,7 @@ function discardStroke(round) {
   round.ink = 0;
 }
 
-function crossesTerrain(a, b, box) {
-  // Permit a little overlap at an edge so a fingertip can easily seat the shield.
-  const inset = 10;
+function crossesBox(a, b, box, inset = 0) {
   let entry = 0;
   let exit = 1;
   for (const [start, end, min, max] of [
@@ -54,8 +58,17 @@ function crossesTerrain(a, b, box) {
   return entry <= exit;
 }
 
+function crossesPatrol(a, b, dog, radius) {
+  const target = dog.patrol.to;
+  const start = Math.min(dog.x, target);
+  const end = Math.max(dog.x, target);
+  return crossesBox(a, b, { x: start, y: dog.y - radius, w: end - start, h: radius * 2 }) ||
+    distance({ x: target, y: dog.y }, nearestPoint(target, dog.y, a, b)) < radius;
+}
+
 function extendStroke(round, point) {
-  point = { x: point.x, y: Math.min(point.y, BOARD.ground - RULES.lineRadius) };
+  const floor = round.ground.find(box => point.x >= box.x && point.x < box.x + box.w);
+  point = { x: point.x, y: Math.min(point.y, (floor?.y ?? BOARD.ground) - RULES.lineRadius) };
   const points = round.points;
   const last = points.at(-1) || point;
   const delta = distance(last, point);
@@ -65,14 +78,18 @@ function extendStroke(round, point) {
   if (available <= 0.01) return "dry";
   const fraction = delta > available ? available / delta : 1;
   const end = { x: last.x + (point.x - last.x) * fraction, y: last.y + (point.y - last.y) * fraction };
-  const crossesPuppy = round.level.dogs.some(dog =>
-    distance(dog, nearestPoint(dog.x, dog.y, last, end)) < RULES.puppyRadius + RULES.lineRadius
-  );
+  const radius = RULES.puppyRadius + RULES.lineRadius;
+  const crossesPuppy = round.dogs.some(dog => distance(dog, nearestPoint(dog.x, dog.y, last, end)) < radius);
   if (crossesPuppy) {
     discardStroke(round);
     return "puppy";
   }
-  if (round.level.boxes.some(box => crossesTerrain(last, end, box))) {
+  if (round.level.dogs.some(dog => dog.patrol && crossesPatrol(last, end, dog, radius))) {
+    discardStroke(round);
+    return "patrol";
+  }
+  // Leave a little room to seat the line at a ledge with a fingertip.
+  if (round.terrain.some(box => crossesBox(last, end, box, 10))) {
     discardStroke(round);
     return "terrain";
   }
@@ -108,10 +125,10 @@ function turnAlongWall(bee, nx, ny) {
   bee.normalY = ny;
 }
 
-function repel(bee, nx, ny, offset) {
+function repel(bee, nx, ny, offset, vx = 0, vy = 0) {
   bee.x += nx * (offset + 0.02);
   bee.y += ny * (offset + 0.02);
-  const normalSpeed = bee.vx * nx + bee.vy * ny;
+  const normalSpeed = (bee.vx - vx) * nx + (bee.vy - vy) * ny;
   if (normalSpeed >= 0) return;
   bee.vx -= 1.48 * normalSpeed * nx;
   bee.vy -= 1.48 * normalSpeed * ny;
@@ -120,7 +137,7 @@ function repel(bee, nx, ny, offset) {
 
 function repelFromBox(bee, box) {
   const contact = boxContact(bee.x, bee.y, RULES.beeRadius, box);
-  if (contact) repel(bee, contact.nx, contact.ny, contact.depth);
+  if (contact) repel(bee, contact.nx, contact.ny, contact.depth, box.vx, box.vy);
 }
 
 function repelFromInk(round, bee) {
@@ -166,7 +183,7 @@ function repelFromInk(round, bee) {
 }
 
 function steerBee(round, bee, dt) {
-  const dogs = round.level.dogs;
+  const dogs = round.dogs;
   const target = dogs.reduce((best, dog) => distance(bee, dog) < distance(bee, best) ? dog : best);
   const angle = Math.atan2(target.y - bee.y, target.x - bee.x);
   const wander = 0.29 * Math.sin(round.elapsed * 5.5 + bee.id * 1.58);
@@ -178,7 +195,7 @@ function steerBee(round, bee, dt) {
     vx = vx * 0.26 - bee.normalY * turn + 14 * bee.normalX;
     vy = vy * 0.26 + bee.normalX * turn + 14 * bee.normalY;
   }
-  const wind = (round.level.wind || 0) * Math.sin(round.elapsed * 2.2);
+  const wind = windAt(round.level, round.elapsed);
   bee.vx += (vx + wind - bee.vx) * 4.8 * dt;
   bee.vy += (vy - bee.vy) * 4.8 * dt;
   const speed = Math.hypot(bee.vx, bee.vy);
@@ -199,8 +216,7 @@ function moveBee(round, bee, dt) {
     if (bee.x < r) repel(bee, 1, 0, r - bee.x);
     if (bee.x > BOARD.width - r) repel(bee, -1, 0, bee.x - BOARD.width + r);
     if (bee.y < r) repel(bee, 0, 1, r - bee.y);
-    if (bee.y > BOARD.ground - r) repel(bee, 0, -1, bee.y - BOARD.ground + r);
-    for (const box of round.level.boxes) repelFromBox(bee, box);
+    for (const box of round.terrain) repelFromBox(bee, box);
     repelFromInk(round, bee);
   }
 }
@@ -210,13 +226,14 @@ function stepRound(round, dt = RULES.step) {
   round.elapsed += dt;
   round.ticks++;
   round.time = Math.max(0, round.level.time - round.elapsed);
+  updateScene(round);
   stepInk(round, dt);
   for (const effect of round.effects) effect.age += dt;
   round.effects = round.effects.filter(effect => effect.age < 0.39);
   for (const bee of round.bees) {
     if (bee.delay > round.elapsed) continue;
     moveBee(round, bee, dt);
-    const touched = round.level.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + RULES.beeRadius);
+    const touched = round.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + RULES.beeRadius);
     if (touched >= 0) {
       round.touched = touched;
       round.phase = "loss";
@@ -233,12 +250,16 @@ function stepRound(round, dt = RULES.step) {
 function runEngineChecks() {
   function simulate(level, route) {
     const round = makeRound(level);
-    for (const [x, y] of route) extendStroke(round, { x, y });
+    for (const [x, y] of route) {
+      const event = extendStroke(round, { x, y });
+      if (event === "puppy" || event === "patrol" || event === "terrain") return round;
+    }
     launchSwarm(round);
     for (let ticks = 0; ticks < 1200 && round.phase === "playing"; ticks++) stepRound(round);
     return round;
   }
   const references = LEVELS.map(level => simulate(level, level.guide));
+  const alternateWins = LEVELS.filter(level => level.challenge).map(level => simulate(level, level.alternate));
   const weak = LEVELS.map(level => simulate(level, [[18, 91], [58, 94]]));
   const invalid = makeRound(LEVELS[0]);
   const puppy = invalid.level.dogs[0];
@@ -265,8 +286,35 @@ function runEngineChecks() {
   const rolled = simulate({
     ...LEVELS[0], time: 8, dogs: [{ x: 570, y: 443 }], hives: [{ x: 244, y: 414, count: 8 }],
   }, ring);
+  const pit = { x: 400, width: 120, bottom: 546 };
+  const pitScene = { ...LEVELS[0], dogs: [], hives: [], pits: [pit] };
+  const fallen = simulate(pitScene, [[435, 380], [483, 380]]);
+  function pitEntrance(opening) {
+    return simulate({
+      ...pitScene, dogs: [{ x: 460, y: 511 }], hives: [{ x: 460, y: 375, count: 6 }],
+      boxes: [
+        { x: 380, y: 460, w: 80 - opening / 2, h: 24 },
+        { x: 460 + opening / 2, y: 460, w: 80 - opening / 2, h: 24 },
+      ],
+    }, [[20, 155], [65, 155]]);
+  }
+  const patrolLevel = LEVELS.find(level => level.id === "first-patrol");
+  const patrol = makeRound(patrolLevel);
+  extendStroke(patrol, { x: 519, y: 384 });
+  const crossesRoute = extendStroke(patrol, { x: 519, y: 461 });
+  patrol.elapsed = patrolLevel.dogs[0].patrol.period / 2;
+  updateScene(patrol);
+  // An upward-moving shelf must lift resting ink even in the absence of bees.
+  const lift = {
+    ...LEVELS[0], time: 2.75, dogs: [], hives: [],
+    boxes: [{ x: 400, y: 350, w: 150, h: 20, travel: { dy: -55, period: 5.5 } }],
+  };
+  const lifted = simulate(lift, [[429, 344], [509, 344]]);
   return {
-    guidedWins: { pass: references.every(round => round.phase === "win" && round.bounces > 0), detail: references.map(round => round.phase + "/" + round.bounces + "/" + round.stars).join(", ") },
+    guidedWins: { pass: references.length === 20 && references.every(round => round.phase === "win" && round.bounces > 0 && round.ticks === 1200),
+      detail: references.map(round => round.phase + "/" + round.bounces + "/" + round.stars).join(", ") },
+    challengeAlternatives: { pass: alternateWins.length === 4 && alternateWins.every(round => round.phase === "win"),
+      detail: "Each challenge has a second route that survives the entire attack." },
     weakLosses: { pass: weak.every(round => round.phase === "loss"), detail: weak.map(round => round.phase).join(", ") },
     puppyExclusion: { pass: crossing === "puppy" && !invalid.points.length, detail: "A sampled segment crossing a puppy clears the draft stroke." },
     budgetClamp: { pass: budget.ink === budget.level.ink && budget.points.at(-1).x === budget.level.ink + 10, detail: "Fast input is trimmed to the last available unit of ink." },
@@ -278,5 +326,13 @@ function runEngineChecks() {
       detail: "Bee impacts tip a wall away from its ceiling, opening a " + Math.round(gap) + " px gap." },
     ringRolls: { pass: rolled.inkBody.x > 448 && Math.abs(rolled.inkBody.angle) > .8 && rolled.bounces > 0,
       detail: "A round stroke translates and rotates along the grass in response to impacts." },
+    inkFallsIntoPit: { pass: Math.abs(fallen.inkBody.y - pit.bottom + RULES.lineRadius) < 1,
+      detail: "Unsupported ink passes the rim and rests on the visible pit floor." },
+    gapsControlBeePassage: { pass: pitEntrance(8).phase === "win" && pitEntrance(36).phase === "loss",
+      detail: "Bees reach a puppy through a wide gap and are blocked by a narrow gap." },
+    patrolPathIsProtected: { pass: crossesRoute === "patrol" && patrol.dogs[0].x === patrolLevel.dogs[0].patrol.to,
+      detail: "The shown patrol blocks drawing through future positions and the dog reaches the shown endpoint." },
+    platformLiftsInk: { pass: Math.abs(lifted.inkBody.y - (lifted.platforms[0].y - RULES.lineRadius)) < 2 &&
+        lifted.inkBody.y < 300, detail: "The moving collision surface lifts the stroke to its visible position." },
   };
 }

@@ -12,9 +12,9 @@ const PALETTES = {
   canyon: { sky: "#f3d7b4", horizon: "#f3e4c3", far: "#d6bbb0", near: "#bdab8e", meadow: "#e2c18c", grass: "#9a9a70", soil: "#ae805c", deep: "#845f4b" },
 };
 
-const LEVELS = [
+const LEGACY_LEVELS = [
   {
-    name: "第一道防线", theme: "晴日花田", palette: "morning", time: 10, ink: 520,
+    id: "first-shelter", name: "第一道防线", theme: "晴日花田", palette: "morning", ink: 520,
     copy: "松手后墨线会落下。让拱门两脚踩稳草地，才能挡住蜂群。",
     hint: "沿虚线画出拱门，让两端稳稳接地。",
     dogs: [{ x: 476, y: 443 }], hives: [{ x: 234, y: 193, count: 6 }],
@@ -23,7 +23,7 @@ const LEVELS = [
     gold: 305, silver: 410,
   },
   {
-    name: "高台上的汪", theme: "苔草山坡", palette: "spring", time: 10, ink: 445,
+    id: "lookout", name: "高台上的汪", theme: "苔草山坡", palette: "spring", ink: 445,
     copy: "小狗在高台上。把高台当作防线的一部分。",
     hint: "从平台的一侧起笔，绕过头顶后接回平台。",
     dogs: [{ x: 647, y: 335 }], hives: [{ x: 305, y: 326, count: 8 }],
@@ -32,7 +32,7 @@ const LEVELS = [
     gold: 265, silver: 350,
   },
   {
-    name: "两面来蜂", theme: "双蜂山谷", palette: "noon", time: 10, ink: 402,
+    id: "two-hives", name: "两面来蜂", theme: "双蜂山谷", palette: "noon", ink: 402,
     copy: "两边的蜂巢都会出动。留意防线另一侧的缺口。",
     hint: "从小狗的一边绕到另一边，落笔处也要封住。",
     dogs: [{ x: 450, y: 443 }], hives: [{ x: 168, y: 204, count: 5 }, { x: 745, y: 249, count: 6 }],
@@ -41,8 +41,8 @@ const LEVELS = [
     gold: 273, silver: 340,
   },
   {
-    name: "有风的桥", theme: "东风坡", palette: "wind", time: 10, ink: 405, wind: 46,
-    copy: "风会把蜜蜂吹向两侧。桥下的蜜蜂也能飞上来。",
+    id: "wind-bridge", name: "有风的桥", theme: "东风坡", palette: "wind", ink: 405, wind: { mode: "steady", strength: -46 },
+    copy: "强风把蜜蜂向左吹。桥下的蜜蜂也能飞上来。",
     hint: "桥是实心的，把线的两端接到桥面上。",
     dogs: [{ x: 470, y: 309 }], hives: [{ x: 265, y: 401, count: 7 }, { x: 673, y: 186, count: 6 }],
     boxes: [{ x: 363, y: 344, w: 213, h: 30 }, { x: 747, y: 425, w: 112, h: 53 }],
@@ -50,7 +50,7 @@ const LEVELS = [
     gold: 267, silver: 338,
   },
   {
-    name: "双汪集合", theme: "杏色草原", palette: "apricot", time: 10, ink: 627,
+    id: "puppy-pair", name: "双汪集合", theme: "杏色草原", palette: "apricot", ink: 627,
     copy: "这次要保护两只小狗。它们可以共用一条防线。",
     hint: "画一座大一点的拱门，把两只小狗都罩住。",
     dogs: [{ x: 333, y: 443 }, { x: 552, y: 443, brown: true }],
@@ -60,7 +60,7 @@ const LEVELS = [
     gold: 480, silver: 555,
   },
   {
-    name: "黄昏大营救", theme: "月升花谷", palette: "dusk", time: 10, ink: 575, wind: 68,
+    id: "dusk-rescue", name: "黄昏大营救", theme: "月升花谷", palette: "dusk", ink: 575, wind: { mode: "reversing", strength: 68 },
     copy: "三座蜂巢、两只小狗。用一笔和横桥封住所有来路。",
     hint: "把横桥当作防线的底边，两只小狗一起围起来。",
     dogs: [{ x: 347, y: 329, brown: true }, { x: 552, y: 329 }],
@@ -70,7 +70,7 @@ const LEVELS = [
     gold: 459, silver: 543,
   },
   {
-    name: "上下夹击", theme: "落日石桥", palette: "canyon", challenge: true, time: 10, ink: 515,
+    id: "bridge-rescue", name: "上下夹击", theme: "落日石桥", palette: "canyon", ink: 515,
     copy: "两只小狗分别在桥上和桥下。让防线靠稳桥边，用一笔封住两个入口。",
     hint: "先护住桥上的小狗，再沿桥的右缘往下画，把线落在右下的矮台上。",
     dogs: [{ x: 453, y: 295 }, { x: 471, y: 443, brown: true }],
@@ -82,5 +82,182 @@ const LEVELS = [
     ],
     guide: [[363, 324], [368, 284], [389, 252], [430, 233], [477, 233], [516, 251], [543, 287], [553, 324], [579, 324], [586, 332], [590, 367], [599, 405], [624, 428], [650, 428]],
     gold: 420, silver: 475,
+    alternate: [[363, 324], [361, 289], [380, 248], [427, 225], [478, 228], [520, 245], [548, 284], [553, 324], [578, 324], [586, 332], [590, 367], [602, 405], [625, 428], [651, 428]],
   },
 ];
+
+const LEVEL_GROUPS = [
+  {
+    id: "terrain", name: "地形支撑", levels: [
+      LEGACY_LEVELS[0],
+      LEGACY_LEVELS[1],
+      {
+        id: "narrow-pit", name: "跨过窄坑", theme: "浅沟花田", palette: "apricot", ink: 490,
+        copy: "右边少了一块草地。让防线跨过浅坑，两脚都落在实地上。",
+        hint: "从小狗左边绕过头顶，第二只脚落在坑的右岸。",
+        pits: [{ x: 489, width: 62, bottom: 535 }],
+        dogs: [{ x: 451, y: 443 }], hives: [{ x: 222, y: 206, count: 7 }, { x: 709, y: 223, count: 4 }],
+        boxes: [],
+        guide: [[371, 472], [376, 415], [400, 387], [441, 370], [503, 373], [548, 392], [569, 423], [574, 472]],
+        gold: 350, silver: 425,
+      },
+      LEGACY_LEVELS[4],
+      LEGACY_LEVELS[6],
+    ],
+  },
+  {
+    id: "wind", name: "风与蜂群", levels: [
+      {
+        ...LEGACY_LEVELS[2],
+        wind: { mode: "steady", strength: 24 },
+        copy: "轻风把蜜蜂向右吹。留意两侧蜂巢和墨线两端的缺口。",
+      },
+      LEGACY_LEVELS[3],
+      {
+        id: "gully-gust", name: "沟里的蜂群", theme: "阵风浅谷", palette: "wind", ink: 510,
+        copy: "有一座蜂巢藏在沟里。阵风来了，小心蜜蜂从防线底下钻进来。",
+        hint: "防线左脚落在草地上，右脚伸进沟里，接到沟底。",
+        wind: { mode: "gust", strength: -60 },
+        pits: [{ x: 515, width: 217, bottom: 546 }],
+        dogs: [{ x: 460, y: 443 }], hives: [{ x: 259, y: 190, count: 6 }, { x: 659, y: 502, count: 8 }],
+        boxes: [],
+        guide: [[376, 472], [379, 418], [409, 386], [460, 372], [505, 390], [539, 430], [541, 486], [545, 540]],
+        gold: 365, silver: 445,
+      },
+      {
+        id: "reversing-wind", name: "风向掉头", theme: "回风草坡", palette: "noon", ink: 418,
+        copy: "风会来回换向。小狗在窄台上，靠稳两端才能顶住两侧的蜂群。",
+        hint: "让两脚都踩上窄台，给小狗的两侧留出空间。",
+        wind: { mode: "reversing", strength: 58 },
+        dogs: [{ x: 464, y: 341 }], hives: [{ x: 189, y: 300, count: 7 }, { x: 714, y: 241, count: 7 }],
+        boxes: [{ x: 363, y: 376, w: 199, h: 40 }, { x: 722, y: 421, w: 105, h: 57 }],
+        guide: [[394, 370], [400, 316], [425, 290], [465, 273], [509, 289], [531, 319], [534, 370]],
+        gold: 285, silver: 365,
+      },
+      {
+        ...LEGACY_LEVELS[5],
+        alternate: [[295, 358], [295, 295], [318, 265], [382, 244], [498, 241], [563, 254], [595, 284], [609, 324], [611, 358]],
+      },
+    ],
+  },
+  {
+    id: "patrol", name: "巡逻小狗", levels: [
+      {
+        id: "first-patrol", name: "散步的小狗", theme: "脚印花田", palette: "morning", ink: 530,
+        copy: "这只小狗会沿脚印往返。把它走得到的地方都罩住。",
+        hint: "从脚印左边起笔，绕过整条路线，再在右边接地。",
+        dogs: [{ x: 416, y: 443, patrol: { to: 501, period: 4.8 } }],
+        hives: [{ x: 229, y: 189, count: 7 }], boxes: [],
+        guide: [[351, 472], [353, 416], [385, 384], [427, 371], [485, 371], [533, 388], [561, 423], [562, 472]],
+        gold: 360, silver: 450,
+      },
+      {
+        id: "ledge-patrol", name: "高台散步", theme: "苔草长台", palette: "spring", ink: 485,
+        copy: "小狗会在高台两端折返，蜜蜂会追着它飞。",
+        hint: "沿脚印外画个长拱门，两脚落回高台。",
+        dogs: [{ x: 465, y: 316, patrol: { to: 558, period: 4.6 } }],
+        hives: [{ x: 227, y: 309, count: 7 }, { x: 755, y: 203, count: 4 }],
+        boxes: [{ x: 382, y: 351, w: 309, h: 33 }],
+        guide: [[407, 345], [410, 298], [433, 262], [477, 246], [547, 247], [591, 267], [614, 305], [619, 345]],
+        gold: 355, silver: 438,
+      },
+      {
+        id: "long-patrol", name: "一路护送", theme: "长草原", palette: "apricot", ink: 585,
+        copy: "脚印拉得很长，墨水有限。把屋顶画低一些，给两端省点墨水。",
+        hint: "在脚印两端外落脚，画一条低而宽的防线。",
+        dogs: [{ x: 304, y: 443, patrol: { to: 590, period: 5.6 } }],
+        hives: [{ x: 183, y: 272, count: 7 }, { x: 731, y: 222, count: 7 }], boxes: [],
+        guide: [[251, 472], [254, 416], [283, 388], [339, 374], [552, 374], [609, 391], [642, 423], [646, 472]],
+        gold: 520, silver: 560,
+      },
+      {
+        id: "double-patrol", name: "迎面散步", theme: "杏花平原", palette: "noon", ink: 650,
+        copy: "两只小狗从两头同时出发。别忘了它们折返时也会走到外侧。",
+        hint: "从最左脚印画到最右脚印，用一条长拱门一起保护。",
+        dogs: [{ x: 318, y: 443, patrol: { to: 400, period: 4.7 } }, { x: 590, y: 443, brown: true, patrol: { to: 494, period: 5.4 } }],
+        hives: [{ x: 178, y: 211, count: 8 }, { x: 733, y: 283, count: 8 }], boxes: [],
+        guide: [[256, 472], [257, 426], [282, 390], [334, 370], [482, 370], [569, 371], [617, 391], [647, 427], [651, 472]],
+        gold: 540, silver: 615,
+      },
+      {
+        id: "bridge-patrol", name: "上下巡逻", theme: "暮色石桥", palette: "dusk", ink: 625,
+        copy: "桥上和桥下都有小狗在走。既要罩住头顶，也要堵住桥下的入口。",
+        hint: "先罩住桥上的脚印，再沿右边绕下去，接到右侧矮台。",
+        dogs: [{ x: 397, y: 295, patrol: { to: 530, period: 4.7 } }, { x: 502, y: 443, brown: true, patrol: { to: 377, period: 5.4 } }],
+        hives: [{ x: 196, y: 214, count: 7 }, { x: 736, y: 190, count: 7 }, { x: 765, y: 391, count: 8 }],
+        boxes: [{ x: 278, y: 330, w: 351, h: 28 }, { x: 278, y: 358, w: 43, h: 120 }, { x: 642, y: 435, w: 88, h: 43 }],
+        guide: [[331, 324], [335, 282], [364, 242], [417, 226], [509, 226], [551, 246], [576, 287], [585, 324], [630, 324], [636, 340], [644, 390], [667, 429], [700, 429]],
+        alternate: [[344, 324], [344, 269], [379, 235], [442, 220], [507, 223], [562, 251], [584, 287], [594, 324], [629, 324], [637, 337], [648, 401], [673, 429], [713, 429]],
+        gold: 520, silver: 590,
+      },
+    ],
+  },
+  {
+    id: "platforms", name: "活动平台", levels: [
+      {
+        id: "sliding-support", name: "滑动的落脚处", theme: "滑台溪沟", palette: "spring", ink: 555,
+        copy: "右边的矮台会横向移动。右脚要落在它始终能托住的位置。",
+        hint: "左脚踩实草地，右脚落到滑台靠中间的位置。",
+        pits: [{ x: 535, width: 196, bottom: 546 }],
+        dogs: [{ x: 484, y: 443 }], hives: [{ x: 244, y: 222, count: 6 }, { x: 751, y: 230, count: 7 }],
+        boxes: [{ x: 548, y: 503, w: 122, h: 22, travel: { dx: 33, period: 5.4 } }],
+        guide: [[394, 472], [400, 418], [429, 379], [486, 366], [543, 382], [587, 422], [615, 469], [623, 497]],
+        gold: 430, silver: 500,
+      },
+      {
+        id: "rising-support", name: "一上一下", theme: "升降山坡", palette: "wind", ink: 550,
+        copy: "右侧平台会升降。给拱门留一点高度，让它被托起时还有空间。",
+        hint: "左脚踩固定台，右脚搭到升降台上，屋顶画得高一些。",
+        dogs: [{ x: 468, y: 355 }], hives: [{ x: 221, y: 215, count: 7 }, { x: 750, y: 229, count: 7 }],
+        boxes: [
+          { x: 333, y: 390, w: 195, h: 34 },
+          { x: 523, y: 416, w: 58, h: 62 },
+          { x: 584, y: 390, w: 106, h: 24, travel: { dy: 33, period: 5.8 } },
+        ],
+        guide: [[372, 384], [376, 324], [410, 279], [468, 261], [529, 268], [582, 300], [613, 341], [620, 384]],
+        gold: 405, silver: 482,
+      },
+      {
+        id: "pit-brace", name: "宽坑借力", theme: "深沟花谷", palette: "canyon", ink: 560,
+        copy: "坑里的滑台会顶到墨线。把脚落到坑底，让防线有稳固的支撑。",
+        hint: "右脚沿着坑的左壁往下画，避开滑台，接到坑底。",
+        pits: [{ x: 502, width: 250, bottom: 549 }],
+        dogs: [{ x: 433, y: 443 }], hives: [{ x: 214, y: 208, count: 6 }, { x: 692, y: 492, count: 8 }],
+        boxes: [{ x: 570, y: 517, w: 103, h: 21, travel: { dx: -43, period: 4.8 } }],
+        guide: [[355, 472], [357, 415], [392, 378], [439, 367], [496, 387], [521, 427], [521, 482], [522, 543]],
+        gold: 370, silver: 480,
+      },
+      {
+        id: "opening-seam", name: "会张开的缝", theme: "开合石桥", palette: "noon", ink: 575,
+        copy: "两块台面会分开。下面的蜜蜂正等着从缝里飞上来。",
+        hint: "画完拱门后，让右脚向左折回，盖住两块台面之间的缝。",
+        dogs: [{ x: 449, y: 327 }], hives: [{ x: 223, y: 213, count: 6 }, { x: 615, y: 420, count: 9 }, { x: 749, y: 198, count: 4 }],
+        boxes: [
+          { x: 328, y: 362, w: 201, h: 32 },
+          { x: 534, y: 362, w: 175, h: 26, travel: { dx: 47, period: 5.2 } },
+        ],
+        guide: [[378, 356], [384, 298], [424, 259], [479, 243], [538, 248], [580, 280], [600, 318], [603, 356], [549, 356], [486, 356]],
+        gold: 460, silver: 535,
+      },
+      {
+        id: "crossing-bridges", name: "交错浮桥", theme: "落日双沟", palette: "canyon", ink: 755,
+        copy: "两座平台一升一滑。让防线跨在沟的两侧，护住中间的两只小狗。",
+        hint: "左脚搭在升降台右侧，跨过两只小狗，右脚搭上滑台靠中间的位置。",
+        pits: [{ x: 137, width: 147, bottom: 549 }, { x: 521, width: 243, bottom: 549 }],
+        dogs: [{ x: 340, y: 443 }, { x: 459, y: 443, brown: true }],
+        hives: [{ x: 151, y: 238, count: 8 }, { x: 754, y: 196, count: 8 }, { x: 713, y: 447, count: 7 }],
+        boxes: [
+          { x: 168, y: 505, w: 110, h: 23, travel: { dy: -28, period: 5.8 } },
+          { x: 555, y: 499, w: 145, h: 24, travel: { dx: 44, period: 4.4, phase: .36 } },
+        ],
+        guide: [[251, 499], [250, 446], [276, 400], [319, 365], [405, 349], [494, 357], [553, 388], [608, 441], [630, 493]],
+        alternate: [[258, 499], [256, 447], [276, 397], [336, 356], [421, 344], [512, 356], [579, 393], [621, 452], [643, 493]],
+        gold: 590, silver: 675,
+      },
+    ],
+  },
+];
+
+const LEVELS = LEVEL_GROUPS.flatMap((group, groupIndex) => group.levels.map((level, index) => ({
+  ...level, time: 10, groupIndex, challenge: index === group.levels.length - 1,
+})));

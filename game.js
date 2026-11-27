@@ -5,28 +5,44 @@
   const field = byId("field");
   const paint = makePainter(field);
   const audio = makeAudio();
-  const saveKey = "ink-and-honey-progress-v1";
-  const chapterNames = ["第一关", "第二关", "第三关", "第四关", "第五关", "第六关", "第七关"];
+  const saveKey = "ink-and-honey-progress-v2";
+  const oldSaveKey = "ink-and-honey-progress-v1";
   const lockIcon = '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="5" width="7" height="5.5" rx="1"/><path d="M4 5V3.6a2 2 0 0 1 4 0V5"/></svg>';
   const backgroundControls = [document.querySelector(".masthead"), document.querySelector(".intro"), document.querySelector(".stage-bar"), document.querySelector(".side"), field];
   const ui = {
     result: byId("result"), next: byId("result-next"), retry: byId("result-retry"),
     timer: byId("timer-label"), ink: byId("ink-label"), fill: byId("ink-fill"),
     meter: byId("ink-meter"), rounds: byId("rounds"), hint: byId("hint"), notice: byId("notice"),
-    announce: byId("announcement"), help: byId("round-help"),
+    announce: byId("announcement"), help: byId("round-help"), groups: byId("groups"),
+    groupLock: byId("group-lock"), wind: byId("wind-indicator"), windArrow: byId("wind-arrow"),
   };
   const best = readProgress();
-  let levelIndex = 0;
+  let levelIndex = Math.max(0, best.indexOf(0));
+  let browseGroup = LEVELS[levelIndex].groupIndex;
+  let nextLevel = -1;
   let round;
   let pointer = null;
   let noticeTimer;
   let previousInk;
   let previousTime;
+  let previousWind;
   let sound = false;
   let lag = 0;
   let time = 0;
   let lastFrame = performance.now();
-  const view = { age: 0, hint: !best[0], drawing: false, cursor: null };
+  const view = { age: 0, hint: shouldShowHint(levelIndex), drawing: false, cursor: null };
+  const groupButtons = LEVEL_GROUPS.map((group, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "group-button";
+    button.textContent = group.name;
+    button.addEventListener("click", () => {
+      browseGroup = index;
+      updateLevels();
+    });
+    ui.groups.append(button);
+    return button;
+  });
   const nodes = LEVELS.map((level, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -37,38 +53,82 @@
   });
 
   function readProgress() {
+    const score = value => Number.isInteger(value) ? clamp(value, 0, 3) : 0;
     try {
       const data = JSON.parse(localStorage.getItem(saveKey));
-      return LEVELS.map((level, index) => Number.isInteger(data?.[index]) ? clamp(data[index], 0, 3) : 0);
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        return LEVELS.map(level => score(data[level.id]));
+      }
     } catch {
-      return LEVELS.map(() => 0);
+      // Recover a readable legacy save if the current record is unavailable.
+    }
+    try {
+      const old = JSON.parse(localStorage.getItem(oldSaveKey));
+      if (Array.isArray(old)) {
+        const migrated = new Map(LEGACY_LEVELS.map((level, index) => [level.id, score(old[index])]));
+        const progress = LEVELS.map(level => migrated.get(level.id) ?? 0);
+        saveProgress(progress);
+        return progress;
+      }
+    } catch {
+      // Storage can be disabled when a local file is opened.
+    }
+    return LEVELS.map(() => 0);
+  }
+
+  function saveProgress(progress) {
+    try {
+      localStorage.setItem(saveKey, JSON.stringify(Object.fromEntries(
+        LEVELS.map((level, index) => [level.id, progress[index]]),
+      )));
+    } catch {
+      // Keep playing with the in-memory progress when storage is unavailable.
     }
   }
 
   function unlocked(index) {
-    return index === 0 || Boolean(best[index - 1]);
+    return index === best.indexOf(0) || Boolean(best[index]);
+  }
+
+  function shouldShowHint(index) {
+    return !best[index] && LEVELS[index].groupIndex !== LEVELS[index - 1]?.groupIndex;
   }
 
   function selectLevel(index) {
     if (!LEVELS[index] || !unlocked(index)) return;
     levelIndex = index;
-    view.hint = index === 0 && !best[0];
+    browseGroup = LEVELS[index].groupIndex;
+    view.hint = shouldShowHint(index);
     newRound(true);
+    field.scrollIntoView({ block: "nearest" });
   }
 
   function updateLevels() {
+    groupButtons.forEach((button, index) => {
+      button.setAttribute("aria-pressed", String(index === browseGroup));
+    });
     nodes.forEach((button, index) => {
+      button.hidden = LEVELS[index].groupIndex !== browseGroup;
       button.disabled = !unlocked(index);
       if (index === levelIndex) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
       const stars = best[index];
       const status = button.disabled ? "未解锁" : stars ? "已获得 " + stars + " 颗星" : "未通过";
-      button.setAttribute("aria-label", chapterNames[index] + "，" + LEVELS[index].name + "，" + status);
+      button.setAttribute("aria-label", "第 " + (index + 1) + " 关，" + LEVELS[index].name +
+        (LEVELS[index].challenge ? "，挑战关，" : "，") + status);
       const number = String(index + 1).padStart(2, "0");
       const label = LEVELS[index].challenge ? number + " · 挑战关" : number;
       button.innerHTML = "<span>" + label + "</span>" +
         (button.disabled ? lockIcon : "<small aria-hidden=\"true\">" + "★".repeat(stars) + "</small>");
     });
+    const first = LEVELS.findIndex(level => level.groupIndex === browseGroup);
+    const pending = best.indexOf(0);
+    ui.groupLock.hidden = pending < 0 || pending >= first;
+    if (!ui.groupLock.hidden) {
+      ui.groupLock.textContent = best[first - 1]
+        ? "先完成第 " + (pending + 1) + " 关，继续解锁"
+        : "完成第 " + first + " 关挑战后解锁";
+    }
     const stars = best[levelIndex];
     byId("best").textContent = stars ? "本关最佳 " + stars + " / 3 星" : "本关尚未获得星星";
     byId("overall").textContent = "已通过 " + best.filter(Boolean).length + " / " + LEVELS.length;
@@ -88,11 +148,12 @@
     closeResult();
     ui.notice.hidden = true;
     clearTimeout(noticeTimer);
-    byId("round-number").textContent = chapterNames[levelIndex];
+    byId("round-number").textContent = "第 " + (levelIndex + 1) + " 关" + (round.level.challenge ? " · 挑战" : "");
     byId("round-theme").textContent = round.level.theme;
     byId("round-title").textContent = round.level.name;
     byId("round-copy").textContent = round.level.copy;
     ui.hint.disabled = false;
+    ui.wind.hidden = !round.level.wind;
     syncHint();
     updateLevels();
     updateHud();
@@ -119,6 +180,15 @@
       ui.timer.parentElement.classList.toggle("urgent", round.time < 2);
       previousTime = remaining;
     }
+    if (round.level.wind) {
+      const velocity = windAt(round.level, round.elapsed);
+      const direction = velocity > 4 ? "→" : velocity < -4 ? "←" : "·";
+      if (direction !== previousWind) {
+        ui.windArrow.textContent = direction;
+        ui.wind.setAttribute("aria-label", direction === "→" ? "风向右吹" : direction === "←" ? "风向左吹" : "风暂时减弱");
+        previousWind = direction;
+      }
+    }
   }
 
   function announce(message) {
@@ -135,9 +205,13 @@
 
   function addPoint(point) {
     const event = extendStroke(round, point);
-    if (event === "puppy" || event === "terrain") {
+    if (event === "puppy" || event === "terrain" || event === "patrol") {
       view.drawing = false;
-      notify(event === "puppy" ? "墨线碰到小狗了，从它身边重新起笔。" : "沿着地形边缘画，墨线别穿过平台。");
+      notify({
+        puppy: "墨线碰到小狗了，从它身边重新起笔。",
+        terrain: "沿着地形边缘画，墨线别穿过实地。",
+        patrol: "给小狗留出散步空间，沿脚印外侧画线。",
+      }[event]);
     }
     if (event === "dry" && round.ink === round.level.ink && ui.notice.hidden) {
       notify("墨水用完了，松手让防线生效。");
@@ -173,27 +247,28 @@
 
   function showResult() {
     const won = round.phase === "win";
-    const last = levelIndex === LEVELS.length - 1;
     if (won) {
       best[levelIndex] = Math.max(best[levelIndex], round.stars);
-      try {
-        localStorage.setItem(saveKey, JSON.stringify(best));
-      } catch {
-        // Play and unlock levels in memory when local storage is unavailable.
-      }
+      saveProgress(best);
       updateLevels();
     }
+    nextLevel = won ? best.indexOf(0) : -1;
+    const finished = won && nextLevel === -1;
     audio.effect(won ? "win" : "loss");
     const used = Math.round(round.ink / round.level.ink * 100);
     byId("result-stars").textContent = won ? "★".repeat(round.stars) + "☆".repeat(3 - round.stars) : "☆ ☆ ☆";
-    const title = won ? (last ? "全员安全！" : "小狗安全啦！") : "蜜蜂找到缺口了";
+    const title = won ? (finished ? "全员安全！" : "小狗安全啦！") : "蜜蜂找到缺口了";
     byId("result-title").textContent = title;
     byId("result-copy").textContent = won
       ? "用了 " + used + "% 的墨水，拿到 " + round.stars + " 颗星。"
       : "撑了 " + round.elapsed.toFixed(1) + " 秒。试试让防线靠稳地形。";
     ui.retry.textContent = won ? "再画一笔" : "再试一次";
-    ui.help.textContent = won ? (last ? "所有关卡已通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
-    ui.next.hidden = !won || last;
+    ui.help.textContent = won ? (finished ? "所有关卡已通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
+    ui.next.hidden = nextLevel === -1;
+    const nextGroup = LEVELS[nextLevel]?.groupIndex;
+    ui.next.textContent = nextLevel === levelIndex + 1
+      ? (nextGroup === round.level.groupIndex ? "下一关 →" : "下一组 →")
+      : "继续闯关 →";
     ui.result.hidden = false;
     backgroundControls.forEach(element => { element.inert = true; });
     announce(title);
@@ -303,7 +378,7 @@
   };
   ui.retry.addEventListener("click", retry);
   byId("restart").addEventListener("click", retry);
-  ui.next.addEventListener("click", () => selectLevel(levelIndex + 1));
+  ui.next.addEventListener("click", () => selectLevel(nextLevel));
   byId("sound").addEventListener("click", () => {
     sound = audio.setEnabled(!sound);
     byId("sound").setAttribute("aria-pressed", String(sound));
@@ -347,13 +422,16 @@
   window.__omGame = {
     getState: () => ({
       phase: round.phase, level: levelIndex + 1, seconds: round.time, ink: round.ink, stars: round.stars,
+      levelId: round.level.id, group: round.level.groupIndex + 1,
       result: ["win", "loss"].includes(round.phase) ? round.phase : null, best: [...best],
       selfId: "local", players: { local: { connected: true, x: 0, z: 0 } },
     }),
     getStats: () => {
       const body = round.inkBody;
       return {
-        entities: round.bees.length + round.level.dogs.length, tick: round.ticks, bounces: round.bounces,
+        entities: round.bees.length + round.dogs.length, tick: round.ticks, bounces: round.bounces,
+        dogs: round.dogs.map(({x, y}) => ({x, y})),
+        platforms: round.platforms.map(({x, y}) => ({x, y})),
         shield: body && { x: body.x, y: body.y, angle: body.angle },
       };
     },

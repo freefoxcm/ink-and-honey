@@ -23,7 +23,6 @@ button:focus-visible, canvas:focus-visible { outline: 3px solid #98601d; outline
 .brand { display: flex; align-items: center; gap: 11px; font-family: Georgia, serif; font-size: 19px; font-weight: bold; letter-spacing: .075em; white-space: nowrap; }
 .brand-mark { display: grid; width: 39px; height: 39px; place-items: center; border-radius: 12px; background: var(--ink); color: var(--honey); }
 .brand-mark svg { width: 35px; height: 35px; }
-.amp { color: var(--gold); }
 .intro { gap: 16px; margin-block: 22px 25px; }
 h1, h2, h3, p { margin: 0; }
 h1 { font-size: clamp(37px, 5.7vw, 65px); font-weight: 900; line-height: 1.1; letter-spacing: -.055em; }
@@ -48,6 +47,8 @@ canvas:focus-visible { outline-offset: -4px; }
 .timer { gap: 7px; font-size: 12px; }
 .timer strong { font-size: 21px; line-height: 1; min-width: 3ch; text-align: end; }
 .timer.urgent { color: #9b401c; }
+.wind-indicator { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; min-height: 29px; padding: 0 8px; border-radius: 9px; background: var(--card); font-size: 12px; font-weight: 700; }
+.wind-indicator strong { min-width: 1em; text-align: center; font-size: 15px; }
 .stage-bar { gap: 12px; margin-top: 11px; min-height: 43px; }
 .stage-bar p { color: var(--muted); font-size: 13px; line-height: 1.55; }
 .tools { display: flex; gap: 7px; flex: none; }
@@ -64,7 +65,11 @@ canvas:focus-visible { outline-offset: -4px; }
 .side p { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.75; }
 .divider { border-top: 1px solid var(--line); margin-block: 16px; }
 .side h3 { font-size: 13px; font-weight: 800; }
-.rounds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 10px; }
+.groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 9px; }
+.group-button { min-height: 42px; padding: 0 4px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 750; }
+.group-button:hover, .group-button[aria-pressed="true"] { background: var(--sage); color: var(--ink); }
+.side .group-lock { margin-top: 7px; font-size: 11px; }
+.rounds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-top: 8px; }
 .round { position: relative; display: grid; grid-template-rows: auto 11px; align-content: center; gap: 2px; min-height: 47px; border: 0; border-radius: 10px; background: #eef0e5; color: var(--ink); font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .round:enabled:hover { background: #dfe7d6; }
 .round[aria-current="step"], .round[aria-current="step"]:hover { background: var(--ink); color: var(--card); }
@@ -106,7 +111,7 @@ canvas:focus-visible { outline-offset: -4px; }
   .overall { font-size: 11px; padding: 6px 8px; gap: 4px; }
   .layout { display: block; }
   .side { margin-top: 13px; grid-template-columns: minmax(0, 1fr); }
-  .rounds { grid-template-columns: repeat(6, 1fr); }
+  .groups { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .side h2 { font-size: 21px; margin-top: 8px; }
   .side p { margin-top: 5px; }
   .hud { inset: 8px 8px auto; }
@@ -118,13 +123,14 @@ canvas:focus-visible { outline-offset: -4px; }
   .ink svg, .timer svg { width: 15px; height: 15px; }
   .stage { border-radius: 15px; }
   .stage-bar p { font-size: 11px; }
-  .tool, .primary, .round { min-height: 44px; }
+  .tool, .primary, .round, .group-button { min-height: 44px; }
 }
 @media (max-width: 350px) {
   .intro { display: block; }
   .overall { display: none; }
   .tools .tool { padding-inline: 8px; }
   .rounds { gap: 4px; }
+  .wind-indicator { top: 40px; }
 }
 @media (min-width: 751px) and (max-height: 820px) {
   .shell {

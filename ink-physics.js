@@ -4,7 +4,7 @@ const INK_PHYSICS = Object.freeze({
   gravity: 410,
   density: .009,
   beeMass: .85,
-  friction: .34,
+  friction: .26,
   contactMargin: .4,
   penetrationSlop: .12,
   sampleSpacing: 6,
@@ -99,7 +99,7 @@ function boxContact(x, y, radius, box) {
   return { nx: nearest === left ? -1 : 1, ny: 0, depth };
 }
 
-function inkContacts(body, level) {
+function inkContacts(body, round) {
   const cos = Math.cos(body.angle);
   const sin = Math.sin(body.angle);
   const radius = RULES.lineRadius;
@@ -110,25 +110,24 @@ function inkContacts(body, level) {
     const ry = sample.x * sin + sample.y * cos;
     const x = body.x + rx;
     const y = body.y + ry;
-    function add(nx, ny, depth) {
+    function add(nx, ny, depth, vx = 0, vy = 0) {
       if (depth < -margin) return;
-      contacts.push({ nx, ny, depth, rx: rx - radius * nx, ry: ry - radius * ny, normalImpulse: 0, tangentImpulse: 0 });
+      contacts.push({ nx, ny, depth, vx, vy, rx: rx - radius * nx, ry: ry - radius * ny, normalImpulse: 0, tangentImpulse: 0 });
     }
-    add(0, -1, y + radius - BOARD.ground);
     add(0, 1, radius - y);
     add(1, 0, radius - x);
     add(-1, 0, x + radius - BOARD.width);
-    for (const box of level.boxes) {
+    for (const box of round.terrain) {
       const contact = boxContact(x, y, radius + margin, box);
-      if (contact) add(contact.nx, contact.ny, contact.depth - margin);
+      if (contact) add(contact.nx, contact.ny, contact.depth - margin, box.vx, box.vy);
     }
-    for (const dog of level.dogs) {
+    for (const dog of round.dogs) {
       const dx = x - dog.x;
       const dy = y - dog.y;
       const clearance = RULES.puppyRadius + radius;
       if (Math.abs(dx) > clearance + margin || Math.abs(dy) > clearance + margin) continue;
       const separation = Math.hypot(dx, dy);
-      if (separation > 0) add(dx / separation, dy / separation, clearance - separation);
+      if (separation > 0) add(dx / separation, dy / separation, clearance - separation, dog.vx);
     }
   }
   return contacts;
@@ -149,10 +148,10 @@ function inkSpeedAt(body, rx, ry, dx, dy) {
   return (body.vx - body.spin * ry) * dx + (body.vy + body.spin * rx) * dy;
 }
 
-function resolveInkTerrain(body, level) {
+function resolveInkTerrain(body, round) {
   for (let iteration = 0; iteration < 6; iteration++) {
     let deepest = null;
-    for (const contact of inkContacts(body, level)) {
+    for (const contact of inkContacts(body, round)) {
       if (contact.depth > (deepest?.depth ?? INK_PHYSICS.penetrationSlop)) deepest = contact;
     }
     if (!deepest) break;
@@ -164,23 +163,25 @@ function resolveInkTerrain(body, level) {
     body.angle += (rx * ny - ry * nx) * correction * body.inverseInertia;
   }
 
-  const contacts = inkContacts(body, level);
+  const contacts = inkContacts(body, round);
   for (const contact of contacts) {
-    const { nx, ny, rx, ry } = contact;
-    const speed = inkSpeedAt(body, rx, ry, nx, ny);
+    const { nx, ny, rx, ry, vx, vy } = contact;
+    contact.normalSpeed = vx * nx + vy * ny;
+    contact.tangentSpeed = -vx * ny + vy * nx;
+    const speed = inkSpeedAt(body, rx, ry, nx, ny) - contact.normalSpeed;
     contact.rebound = Math.max(0, -speed - 55) * .18;
   }
   for (let iteration = 0; iteration < 7; iteration++) {
     for (const contact of contacts) {
       const { nx, ny, rx, ry } = contact;
       const oldNormal = contact.normalImpulse;
-      const normalSpeed = inkSpeedAt(body, rx, ry, nx, ny);
+      const normalSpeed = inkSpeedAt(body, rx, ry, nx, ny) - contact.normalSpeed;
       contact.normalImpulse = Math.max(0, oldNormal + (contact.rebound - normalSpeed) / inverseInkMass(body, rx, ry, nx, ny));
       const normal = contact.normalImpulse - oldNormal;
       pushInk(body, rx, ry, normal * nx, normal * ny);
 
       const oldTangent = contact.tangentImpulse;
-      const tangentSpeed = inkSpeedAt(body, rx, ry, -ny, nx);
+      const tangentSpeed = inkSpeedAt(body, rx, ry, -ny, nx) - contact.tangentSpeed;
       const limit = INK_PHYSICS.friction * contact.normalImpulse;
       contact.tangentImpulse = clamp(oldTangent - tangentSpeed / inverseInkMass(body, rx, ry, -ny, nx), -limit, limit);
       const tangent = contact.tangentImpulse - oldTangent;
@@ -198,7 +199,7 @@ function stepInk(round, dt) {
   body.x += body.vx * dt;
   body.y += body.vy * dt;
   body.angle += body.spin * dt;
-  resolveInkTerrain(body, round.level);
+  resolveInkTerrain(body, round);
 
   const cos = Math.cos(body.angle);
   const sin = Math.sin(body.angle);
