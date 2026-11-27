@@ -6,12 +6,13 @@
   <meta name="theme-color" content="#f6f3ea">
   <title>一笔护汪 · Ink &amp; Honey</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%23253b34'/%3E%3Cpath d='M9 26q11-25 22 0' fill='none' stroke='%23f7ca6a' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='20' cy='28' r='3' fill='%23f7ca6a'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css">
-  <script defer src="./levels.js"></script>
-  <script defer src="./engine.js"></script>
-  <script defer src="./art.js"></script>
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script defer src="./levels.js?v=2"></script>
+  <script defer src="./ink-physics.js"></script>
+  <script defer src="./engine.js?v=2"></script>
+  <script defer src="./art.js?v=2"></script>
   <script defer src="./audio.js"></script>
-  <script defer src="./game.js"></script>
+  <script defer src="./game.js?v=2"></script>
 </head>
 <body>
   <main class="shell">
@@ -32,7 +33,7 @@
         <h1>一笔护汪<span class="title-dot">.</span></h1>
         <p>画一条能挡住蜜蜂的线，守护花田里的小狗。</p>
       </div>
-      <div class="overall" aria-label="关卡进度"><span class="overall-mark" aria-hidden="true">✦</span><span id="overall">已通过 0 / 6</span></div>
+      <div class="overall" aria-label="关卡进度"><span class="overall-mark" aria-hidden="true">✦</span><span id="overall"></span></div>
     </div>
     <div class="layout">
       <section class="game" aria-label="游戏">
@@ -92,7 +93,7 @@
           <h3>怎么玩</h3>
           <ol>
             <li><span aria-hidden="true">1</span>一笔画出防线</li>
-            <li><span aria-hidden="true">2</span>松手，挡住蜂群</li>
+            <li><span aria-hidden="true">2</span>松手，让防线落稳</li>
             <li><span aria-hidden="true">3</span>守到倒计时归零</li>
           </ol>
           <p>墨水用得越少，星星越多。</p>

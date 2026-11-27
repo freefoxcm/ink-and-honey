@@ -6,7 +6,7 @@
   const paint = makePainter(field);
   const audio = makeAudio();
   const saveKey = "ink-and-honey-progress-v1";
-  const chapterNames = ["第一关", "第二关", "第三关", "第四关", "第五关", "第六关"];
+  const chapterNames = ["第一关", "第二关", "第三关", "第四关", "第五关", "第六关", "第七关"];
   const lockIcon = '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="5" width="7" height="5.5" rx="1"/><path d="M4 5V3.6a2 2 0 0 1 4 0V5"/></svg>';
   const backgroundControls = [document.querySelector(".masthead"), document.querySelector(".intro"), document.querySelector(".stage-bar"), document.querySelector(".side"), field];
   const ui = {
@@ -30,7 +30,7 @@
   const nodes = LEVELS.map((level, index) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "round";
+    button.className = level.challenge ? "round challenge" : "round";
     button.addEventListener("click", () => selectLevel(index));
     ui.rounds.append(button);
     return button;
@@ -64,7 +64,9 @@
       const stars = best[index];
       const status = button.disabled ? "未解锁" : stars ? "已获得 " + stars + " 颗星" : "未通过";
       button.setAttribute("aria-label", chapterNames[index] + "，" + LEVELS[index].name + "，" + status);
-      button.innerHTML = "<span>" + String(index + 1).padStart(2, "0") + "</span>" +
+      const number = String(index + 1).padStart(2, "0");
+      const label = LEVELS[index].challenge ? number + " · 挑战关" : number;
+      button.innerHTML = "<span>" + label + "</span>" +
         (button.disabled ? lockIcon : "<small aria-hidden=\"true\">" + "★".repeat(stars) + "</small>");
     });
     const stars = best[levelIndex];
@@ -133,9 +135,9 @@
 
   function addPoint(point) {
     const event = extendStroke(round, point);
-    if (event === "puppy") {
+    if (event === "puppy" || event === "terrain") {
       view.drawing = false;
-      notify("墨线碰到小狗了，从它身边重新起笔。");
+      notify(event === "puppy" ? "墨线碰到小狗了，从它身边重新起笔。" : "沿着地形边缘画，墨线别穿过平台。");
     }
     if (event === "dry" && round.ink === round.level.ink && ui.notice.hidden) {
       notify("墨水用完了，松手让防线生效。");
@@ -164,7 +166,7 @@
     }
     ui.notice.hidden = true;
     ui.hint.disabled = true;
-    ui.help.textContent = "蜂群出发了。撑到倒计时归零！";
+    ui.help.textContent = "蜂群出发了，小心防线被撞歪！";
     announce(ui.help.textContent);
     audio.effect("start");
   }
@@ -187,10 +189,10 @@
     const title = won ? (last ? "全员安全！" : "小狗安全啦！") : "蜜蜂找到缺口了";
     byId("result-title").textContent = title;
     byId("result-copy").textContent = won
-      ? (last ? "六关通关！" : "") + "用了 " + used + "% 的墨水，拿到 " + round.stars + " 颗星。"
-      : "撑了 " + round.elapsed.toFixed(1) + " 秒。试着把线的两端封住。";
+      ? "用了 " + used + "% 的墨水，拿到 " + round.stars + " 颗星。"
+      : "撑了 " + round.elapsed.toFixed(1) + " 秒。试试让防线靠稳地形。";
     ui.retry.textContent = won ? "再画一笔" : "再试一次";
-    ui.help.textContent = won ? (last ? "六关全部通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
+    ui.help.textContent = won ? (last ? "所有关卡已通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
     ui.next.hidden = !won || last;
     ui.result.hidden = false;
     backgroundControls.forEach(element => { element.inert = true; });
@@ -220,7 +222,8 @@
     if (event.pointerId !== pointer || !view.drawing) return;
     const samples = event.getCoalescedEvents?.();
     for (const sample of samples?.length ? samples : [event]) {
-      if (addPoint(coordinates(sample)) === "puppy") break;
+      addPoint(coordinates(sample));
+      if (!view.drawing) break;
     }
   });
 
@@ -347,7 +350,13 @@
       result: ["win", "loss"].includes(round.phase) ? round.phase : null, best: [...best],
       selfId: "local", players: { local: { connected: true, x: 0, z: 0 } },
     }),
-    getStats: () => ({ entities: round.bees.length + round.level.dogs.length, tick: round.ticks, bounces: round.bounces }),
+    getStats: () => {
+      const body = round.inkBody;
+      return {
+        entities: round.bees.length + round.level.dogs.length, tick: round.ticks, bounces: round.bounces,
+        shield: body && { x: body.x, y: body.y, angle: body.angle },
+      };
+    },
     sendAction(action) {
       if (action?.type === "restart") return retry();
       if (action?.type !== "draw" || !Array.isArray(action.points) || action.points.length < 2 ||
@@ -356,7 +365,10 @@
       if (!points.every(point => Number.isFinite(point?.x) && Number.isFinite(point?.y) &&
           point.x >= 0 && point.x <= BOARD.width && point.y >= 0 && point.y <= BOARD.height)) return false;
       if (!beginStroke(points[0])) return false;
-      for (const point of points.slice(1)) if (addPoint(point) === "puppy") return false;
+      for (const point of points.slice(1)) {
+        addPoint(point);
+        if (!view.drawing) return false;
+      }
       finishStroke();
       return round.phase === "playing";
     },

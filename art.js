@@ -295,11 +295,12 @@ function makePainter(canvas) {
     for (const [index, dog] of round.level.dogs.entries()) {
       puppy(dog, time, round.phase, round.touched === index);
     }
-    inkPath(round.points, "#283b32", RULES.lineRadius * 2);
-    if (round.points.length) {
+    const ink = round.inkBody?.path ?? round.points;
+    inkPath(ink, "#283b32", RULES.lineRadius * 2);
+    if (ink.length) {
       ctx.save();
       ctx.translate(0, -1.7);
-      inkPath(round.points, "#64786a", 2.6);
+      inkPath(ink, "#64786a", 2.6);
       ctx.restore();
       if (view.drawing) {
         const p = round.points.at(-1);

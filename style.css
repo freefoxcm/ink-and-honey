@@ -69,6 +69,7 @@ canvas:focus-visible { outline-offset: -4px; }
 .round:enabled:hover { background: #dfe7d6; }
 .round[aria-current="step"], .round[aria-current="step"]:hover { background: var(--ink); color: var(--card); }
 .round small { color: var(--gold); font-size: 9px; line-height: 1; letter-spacing: 1px; white-space: nowrap; }
+.round.challenge { grid-column: 1 / -1; font-size: 13px; }
 .round[aria-current="step"] small { color: var(--honey); }
 .round:disabled { color: #6e7568; background: #f2f0e7; }
 .round svg { margin: auto; width: 10px; height: 10px; fill: none; stroke: currentColor; }

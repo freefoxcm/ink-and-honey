@@ -9,13 +9,14 @@ const PALETTES = {
   wind: { sky: "#e1eddb", horizon: "#e8efda", far: "#b6cebc", near: "#9bb9aa", meadow: "#ccd597", grass: "#7f9f80", soil: "#9a8b63", deep: "#6d785b" },
   apricot: { sky: "#f7dfbf", horizon: "#f6ebc7", far: "#d7c8a8", near: "#bab68a", meadow: "#e4c88a", grass: "#a3a472", soil: "#ba8e69", deep: "#996e55" },
   dusk: { sky: "#dee3e2", horizon: "#efe6d7", far: "#bdc1b9", near: "#a8b2a4", meadow: "#cccf9d", grass: "#879b7c", soil: "#a58d72", deep: "#817661" },
+  canyon: { sky: "#f3d7b4", horizon: "#f3e4c3", far: "#d6bbb0", near: "#bdab8e", meadow: "#e2c18c", grass: "#9a9a70", soil: "#ae805c", deep: "#845f4b" },
 };
 
 const LEVELS = [
   {
     name: "第一道防线", theme: "晴日花田", palette: "morning", time: 6, ink: 520,
-    copy: "让墨线两端接到草地，蜜蜂就绕不进来了。",
-    hint: "沿虚线画出拱门，两端接到草地。",
+    copy: "松手后墨线会落下。让拱门两脚踩稳草地，才能挡住蜂群。",
+    hint: "沿虚线画出拱门，让两端稳稳接地。",
     dogs: [{ x: 476, y: 443 }], hives: [{ x: 234, y: 193, count: 6 }],
     boxes: [],
     guide: [[401, 478], [406, 419], [426, 389], [451, 375], [482, 372], [511, 384], [535, 412], [546, 445], [548, 478]],
@@ -67,5 +68,19 @@ const LEVELS = [
     boxes: [{ x: 247, y: 364, w: 410, h: 31 }, { x: 87, y: 425, w: 130, h: 53 }],
     guide: [[275, 366], [275, 308], [297, 273], [343, 254], [448, 249], [548, 253], [600, 274], [626, 306], [629, 366]],
     gold: 459, silver: 543,
+  },
+  {
+    name: "上下夹击", theme: "落日石桥", palette: "canyon", challenge: true, time: 9, ink: 515,
+    copy: "两只小狗分别在桥上和桥下。让防线靠稳桥边，用一笔封住两个入口。",
+    hint: "先护住桥上的小狗，再沿桥的右缘往下画，把线落在右下的矮台上。",
+    dogs: [{ x: 453, y: 295 }, { x: 471, y: 443, brown: true }],
+    hives: [{ x: 248, y: 213, count: 7 }, { x: 730, y: 186, count: 7 }, { x: 724, y: 382, count: 7 }],
+    boxes: [
+      { x: 332, y: 330, w: 247, h: 29 },
+      { x: 332, y: 359, w: 39, h: 119 },
+      { x: 588, y: 434, w: 90, h: 44 },
+    ],
+    guide: [[363, 324], [368, 284], [389, 252], [430, 233], [477, 233], [516, 251], [543, 287], [553, 324], [579, 324], [586, 332], [590, 367], [599, 405], [624, 428], [650, 428]],
+    gold: 420, silver: 475,
   },
 ];
