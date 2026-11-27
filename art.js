@@ -237,12 +237,13 @@ function makePainter(canvas) {
     ctx.translate(bee.x, bee.y);
     ctx.scale(Math.sign(bee.vx) || 1, 1);
     ctx.rotate(clamp(bee.vy / 210, -.5, .5));
-    ctx.scale(scale, scale);
+    const size = scale * (bee.heavy ? 1.29 : 1);
+    ctx.scale(size, size);
     const wing = motion.matches ? 1 : Math.sin(time * 59 + bee.id * 2) * .46 + 1;
     oval(ctx, -3, -6, 5.1, 6.5 * wing, "#fff8dcda", -.46);
     oval(ctx, 2, -7, 4.5, 5.7 * wing, "#fff8dcee", .39);
     path(ctx, "M-8 0l-4 3l4 2", "#5e4230", "#5e4230", 1);
-    path(ctx, "M-9 2C-9-6 8-7 10 0C12 9-8 11-9 2Z", "#ffc85b", "#624335", 1.75);
+    path(ctx, "M-9 2C-9-6 8-7 10 0C12 9-8 11-9 2Z", bee.heavy ? "#e99c45" : "#ffc85b", "#624335", 1.75);
     path(ctx, "M-5-3Q-7 1-5 6m5-10q-2 5 0 11", null, "#78533b", 2.1);
     oval(ctx, 6, 0, 1.45, 1.6, "#4b3627");
     ctx.restore();
@@ -336,9 +337,25 @@ function makePainter(canvas) {
     const moving = round.phase === "playing";
     if (round.phase === "ready") movementGuides(round);
     movingPlatforms(round);
+    const ready = round.phase === "ready";
+    const waveWarning = moving && round.waves.find(wave =>
+      wave.at - round.elapsed <= RULES.hiveWarning && round.elapsed - wave.at < .35);
     for (const [index, hive] of round.level.hives.entries()) {
+      if (waveWarning && waveWarning.launches.some(launch => launch.hiveIndex === index)) {
+        oval(ctx, hive.x, hive.y - 5, 53, 50, "#ffbe6079");
+        oval(ctx, hive.x, hive.y - 5, 46, 44, "#ffe49d93");
+      }
       drawHive(hive, time, moving);
-      if (round.phase !== "ready") continue;
+      if (!ready) continue;
+      if (round.waves.length > 1) {
+        const wave = round.waves.findIndex(item => item.launches.some(launch => launch.hiveIndex === index));
+        oval(ctx, hive.x + 34, hive.y - 28, 15, 15, hive.heavy ? "#8d4e2d" : "#375549");
+        ctx.fillStyle = "#fff3ca";
+        ctx.font = "bold 18px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(wave + 1), hive.x + 34, hive.y - 27);
+      }
       const angle = motion.matches ? index * 2 : time * 1.13 + index * 2.4;
       beeSprite({ x: hive.x + Math.cos(angle) * 55, y: hive.y + 8 + Math.sin(angle) * 24, vx: -Math.sin(angle), vy: 0, id: index }, time, .87);
     }
@@ -356,7 +373,7 @@ function makePainter(canvas) {
     }
     if (view.hint && !round.points.length && round.phase === "ready") {
       const points = round.level.guide.map(([x, y]) => ({ x, y }));
-      inkPath(points, "#576b579b", 6, true);
+      if (view.hint === 2) inkPath(points, "#576b579b", 6, true);
       for (const p of [points[0], points.at(-1)]) {
         oval(ctx, p.x, p.y, 7.7, 7.7, "#fff3cf");
         oval(ctx, p.x, p.y, 3.2, 3.2, "#687e58");

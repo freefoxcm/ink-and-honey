@@ -2,9 +2,9 @@
 
 const INK_PHYSICS = Object.freeze({
   gravity: 410,
-  density: .009,
+  density: .0075,
   beeMass: .85,
-  friction: .26,
+  friction: .20,
   contactMargin: .4,
   penetrationSlop: .12,
   sampleSpacing: 6,

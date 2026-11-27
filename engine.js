@@ -9,6 +9,8 @@ const RULES = Object.freeze({
   sampleSpacing: 8,
   speed: 103,
   maxSpeed: 153,
+  heavyBeeMass: 1.55,
+  hiveWarning: .7,
 });
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -22,13 +24,23 @@ function nearestPoint(x, y, a, b) {
   return { x: a.x + t * dx, y: a.y + t * dy };
 }
 
+function makeWaves(level) {
+  const times = level.waveTimes ?? [0];
+  const waves = times.map(at => ({ at, launches: [] }));
+  level.hives.forEach((hive, hiveIndex) => {
+    const index = hive.wave ?? Math.min(hiveIndex, waves.length - 1);
+    waves[index].launches.push({ hiveIndex, count: hive.count, heavy: Boolean(hive.heavy) });
+  });
+  return waves;
+}
+
 function makeRound(level) {
   const ground = groundFor(level);
   const platforms = level.boxes.map(box => ({ ...box, vx: 0, vy: 0 }));
   const dogs = level.dogs.map(dog => ({ ...dog, vx: 0 }));
   const round = {
     level, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
-    ground, platforms, terrain: [...ground, ...platforms], dogs,
+    ground, platforms, terrain: [...ground, ...platforms], dogs, waves: makeWaves(level),
     time: level.time, elapsed: 0, ticks: 0, stars: 0, touched: -1, bounces: 0,
   };
   updateScene(round);
@@ -105,22 +117,27 @@ function launchSwarm(round) {
   if (round.phase !== "ready" || round.ink < RULES.minInk) return false;
   round.inkBody = createInkBody(round.points);
   round.phase = "playing";
-  for (const [hiveIndex, hive] of round.level.hives.entries()) {
-    for (let index = 0; index < hive.count; index++) {
-      const id = round.bees.length;
-      const yaw = index * 2.39996 + hiveIndex;
-      round.bees.push({
-        id, x: hive.x, y: hive.y + 5, vx: Math.cos(yaw) * 34, vy: Math.sin(yaw) * 34,
-        delay: 0.16 + index * 0.13 + hiveIndex * 0.08, turn: id % 2 ? 1 : -1,
-        wall: 0, normalX: 0, normalY: 0, flash: 0,
-      });
+  for (const wave of round.waves) {
+    for (const { hiveIndex, count, heavy } of wave.launches) {
+      const hive = round.level.hives[hiveIndex];
+      for (let index = 0; index < count + Number(heavy); index++) {
+        const id = round.bees.length;
+        const yaw = index * 2.39996 + hiveIndex;
+        round.bees.push({
+          id, x: hive.x, y: hive.y + 5, vx: Math.cos(yaw) * 34, vy: Math.sin(yaw) * 34,
+          delay: wave.at + index * .14, heavy: heavy && index === 0, turn: id % 2 ? 1 : -1,
+          radius: RULES.beeRadius + (heavy && index === 0 ? 2 : 0),
+          wall: 0, normalX: 0, normalY: 0, flash: 0,
+        });
+      }
     }
   }
   return true;
 }
 
-function turnAlongWall(bee, nx, ny) {
-  bee.wall = 0.72;
+function turnAlongWall(bee, nx, ny, followInk = false) {
+  bee.wall = followInk ? 1.4 : .72;
+  bee.followInk = followInk;
   bee.normalX = nx;
   bee.normalY = ny;
 }
@@ -136,14 +153,14 @@ function repel(bee, nx, ny, offset, vx = 0, vy = 0) {
 }
 
 function repelFromBox(bee, box) {
-  const contact = boxContact(bee.x, bee.y, RULES.beeRadius, box);
+  const contact = boxContact(bee.x, bee.y, bee.radius, box);
   if (contact) repel(bee, contact.nx, contact.ny, contact.depth, box.vx, box.vy);
 }
 
 function repelFromInk(round, bee) {
   const body = round.inkBody;
   const points = body.path;
-  const radius = RULES.beeRadius + RULES.lineRadius;
+  const radius = bee.radius + RULES.lineRadius;
   let separation = radius;
   let contact = null;
   for (let index = 1; index < points.length; index++) {
@@ -169,12 +186,12 @@ function repelFromInk(round, bee) {
   const ry = contact.y + ny * RULES.lineRadius - body.y;
   const speed = bee.vx * nx + bee.vy * ny - inkSpeedAt(body, rx, ry, nx, ny);
   if (speed >= 0) return;
-  const inverseBeeMass = 1 / INK_PHYSICS.beeMass;
+  const inverseBeeMass = 1 / (bee.heavy ? RULES.heavyBeeMass : INK_PHYSICS.beeMass);
   const impulse = -1.42 * speed / (inverseBeeMass + inverseInkMass(body, rx, ry, nx, ny));
   bee.vx += nx * impulse * inverseBeeMass;
   bee.vy += ny * impulse * inverseBeeMass;
   pushInk(body, rx, ry, -nx * impulse, -ny * impulse);
-  turnAlongWall(bee, nx, ny);
+  turnAlongWall(bee, nx, ny, true);
   if (bee.flash <= 0 && speed < -12) {
     bee.flash = 0.18;
     round.bounces++;
@@ -192,8 +209,9 @@ function steerBee(round, bee, dt) {
   if (bee.wall > 0) {
     bee.wall = Math.max(0, bee.wall - dt);
     const turn = bee.turn * RULES.speed * 0.88;
-    vx = vx * 0.26 - bee.normalY * turn + 14 * bee.normalX;
-    vy = vy * 0.26 + bee.normalX * turn + 14 * bee.normalY;
+    const pull = bee.followInk ? -9 : 14;
+    vx = vx * 0.26 - bee.normalY * turn + pull * bee.normalX;
+    vy = vy * 0.26 + bee.normalX * turn + pull * bee.normalY;
   }
   const wind = windAt(round.level, round.elapsed);
   bee.vx += (vx + wind - bee.vx) * 4.8 * dt;
@@ -210,7 +228,7 @@ function moveBee(round, bee, dt) {
   bee.x += bee.vx * dt;
   bee.y += bee.vy * dt;
   bee.flash = Math.max(0, bee.flash - dt);
-  const r = RULES.beeRadius;
+  const r = bee.radius;
   const passes = 2;
   for (let pass = 0; pass < passes; pass++) {
     if (bee.x < r) repel(bee, 1, 0, r - bee.x);
@@ -233,7 +251,7 @@ function stepRound(round, dt = RULES.step) {
   for (const bee of round.bees) {
     if (bee.delay > round.elapsed) continue;
     moveBee(round, bee, dt);
-    const touched = round.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + RULES.beeRadius);
+    const touched = round.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + bee.radius);
     if (touched >= 0) {
       round.touched = touched;
       round.phase = "loss";
@@ -255,11 +273,19 @@ function runEngineChecks() {
       if (event === "puppy" || event === "patrol" || event === "terrain") return round;
     }
     launchSwarm(round);
-    for (let ticks = 0; ticks < 1200 && round.phase === "playing"; ticks++) stepRound(round);
+    const limit = Math.ceil(level.time / RULES.step) + 1;
+    for (let ticks = 0; ticks < limit && round.phase === "playing"; ticks++) stepRound(round);
     return round;
   }
   const references = LEVELS.map(level => simulate(level, level.guide));
   const alternateWins = LEVELS.filter(level => level.challenge).map(level => simulate(level, level.alternate));
+  const rectangleWins = LEVELS.map(level => {
+    const left = Math.min(...level.dogs.map(dog => Math.min(dog.x, dog.patrol?.to ?? dog.x))) - 48;
+    const right = Math.max(...level.dogs.map(dog => Math.max(dog.x, dog.patrol?.to ?? dog.x))) + 48;
+    const top = Math.min(...level.dogs.map(dog => dog.y)) - 52;
+    const bottom = Math.max(...level.dogs.map(dog => dog.y)) + 35 - RULES.lineRadius;
+    return simulate(level, [[left, bottom], [left, top], [right, top], [right, bottom]]);
+  }).filter(round => round.phase === "win");
   const weak = LEVELS.map(level => simulate(level, [[18, 91], [58, 94]]));
   const invalid = makeRound(LEVELS[0]);
   const puppy = invalid.level.dogs[0];
@@ -310,11 +336,20 @@ function runEngineChecks() {
     boxes: [{ x: 400, y: 350, w: 150, h: 20, travel: { dy: -55, period: 5.5 } }],
   };
   const lifted = simulate(lift, [[429, 344], [509, 344]]);
+  const waveTimings = references.every(round => round.waves.every(({ at, launches }) =>
+    launches.length > 0 && round.bees.some(bee => bee.delay === at) &&
+    launches.filter(launch => launch.heavy).length === Number(round.level.challenge && at !== 0) &&
+    round.bees.filter(bee => bee.heavy && bee.delay === at).length === launches.filter(launch => launch.heavy).length));
   return {
-    guidedWins: { pass: references.length === 20 && references.every(round => round.phase === "win" && round.bounces > 0 && round.ticks === 1200),
+    guidedWins: { pass: references.length === 20 && references.every(round => round.phase === "win" &&
+        round.bounces > 0 && round.ticks === Math.round(round.level.time / RULES.step)),
       detail: references.map(round => round.phase + "/" + round.bounces + "/" + round.stars).join(", ") },
     challengeAlternatives: { pass: alternateWins.length === 4 && alternateWins.every(round => round.phase === "win"),
       detail: "Each challenge has a second route that survives the entire attack." },
+    rectangleLimits: { pass: rectangleWins.length <= 6 && rectangleWins.every(round => !round.level.challenge),
+      detail: "The standard rectangle wins " + rectangleWins.length + " levels and cannot clear a challenge." },
+    waveTimings: { pass: waveTimings,
+      detail: "Every scheduled wave has a timed release, with a heavy bee in each later challenge wave." },
     weakLosses: { pass: weak.every(round => round.phase === "loss"), detail: weak.map(round => round.phase).join(", ") },
     puppyExclusion: { pass: crossing === "puppy" && !invalid.points.length, detail: "A sampled segment crossing a puppy clears the draft stroke." },
     budgetClamp: { pass: budget.ink === budget.level.ink && budget.points.at(-1).x === budget.level.ink + 10, detail: "Fast input is trimmed to the last available unit of ink." },

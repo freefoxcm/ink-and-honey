@@ -15,6 +15,7 @@
     meter: byId("ink-meter"), rounds: byId("rounds"), hint: byId("hint"), notice: byId("notice"),
     announce: byId("announcement"), help: byId("round-help"), groups: byId("groups"),
     groupLock: byId("group-lock"), wind: byId("wind-indicator"), windArrow: byId("wind-arrow"),
+    waves: byId("waves"),
   };
   const best = readProgress();
   let levelIndex = Math.max(0, best.indexOf(0));
@@ -26,11 +27,13 @@
   let previousInk;
   let previousTime;
   let previousWind;
+  let waveNodes = [];
+  let activeWave = -1;
   let sound = false;
   let lag = 0;
   let time = 0;
   let lastFrame = performance.now();
-  const view = { age: 0, hint: shouldShowHint(levelIndex), drawing: false, cursor: null };
+  const view = { age: 0, hint: 0, drawing: false, cursor: null };
   const groupButtons = LEVEL_GROUPS.map((group, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -90,15 +93,10 @@
     return index === best.indexOf(0) || Boolean(best[index]);
   }
 
-  function shouldShowHint(index) {
-    return !best[index] && LEVELS[index].groupIndex !== LEVELS[index - 1]?.groupIndex;
-  }
-
   function selectLevel(index) {
     if (!LEVELS[index] || !unlocked(index)) return;
     levelIndex = index;
     browseGroup = LEVELS[index].groupIndex;
-    view.hint = shouldShowHint(index);
     newRound(true);
     field.scrollIntoView({ block: "nearest" });
   }
@@ -141,10 +139,12 @@
 
   function newRound(focus) {
     pointer = null;
+    view.hint = 0;
     view.drawing = false;
     view.cursor = null;
     lag = 0;
     round = makeRound(LEVELS[levelIndex]);
+    showWaves();
     closeResult();
     ui.notice.hidden = true;
     clearTimeout(noticeTimer);
@@ -161,11 +161,42 @@
   }
 
   function syncHint() {
-    ui.hint.setAttribute("aria-pressed", String(view.hint));
+    ui.hint.setAttribute("aria-pressed", String(view.hint > 0));
+    ui.hint.querySelector("span").textContent = ["提示", "看路线", "隐藏"][view.hint];
     ui.help.textContent = view.hint ? round.level.hint : "按住拖动来画线，松手后蜂群就会出发。";
   }
 
+  function showWaves() {
+    activeWave = -1;
+    waveNodes = round.waves.map((wave, index) => {
+      const node = document.createElement("li");
+      const number = document.createElement("strong");
+      number.textContent = (index + 1) + "波";
+      const locations = new Set(wave.launches.map(({ hiveIndex }) => {
+        const { x, y } = round.level.hives[hiveIndex];
+        return (x < 335 ? "左" : x > 565 ? "右" : "中") + (y >= 350 ? "下" : "");
+      }));
+      const directions = locations.size > 1 ? "多向" : [...locations][0];
+      node.append(number, wave.at + "秒 · " + directions);
+      if (wave.launches.some(launch => launch.heavy)) {
+        const heavy = document.createElement("span");
+        heavy.className = "wave-heavy";
+        heavy.textContent = "重蜂";
+        node.append(heavy);
+        node.setAttribute("aria-label", node.textContent);
+      }
+      return node;
+    });
+    ui.waves.replaceChildren(...waveNodes);
+  }
+
   function updateHud() {
+    const waveIndex = round.phase === "ready" ? -1 : round.waves.findLastIndex(wave => round.elapsed >= wave.at);
+    if (waveIndex !== activeWave) {
+      waveNodes[activeWave]?.removeAttribute("aria-current");
+      waveNodes[waveIndex]?.setAttribute("aria-current", "step");
+      activeWave = waveIndex;
+    }
     const percent = Math.round(100 * (1 - round.ink / round.level.ink));
     if (percent !== previousInk) {
       ui.ink.textContent = percent + "%";
@@ -368,7 +399,7 @@
   });
 
   ui.hint.addEventListener("click", () => {
-    view.hint = !view.hint;
+    view.hint = (view.hint + 1) % 3;
     syncHint();
   });
 
@@ -423,6 +454,7 @@
     getState: () => ({
       phase: round.phase, level: levelIndex + 1, seconds: round.time, ink: round.ink, stars: round.stars,
       levelId: round.level.id, group: round.level.groupIndex + 1,
+      wave: activeWave + 1, waveTimes: round.waves.map(wave => wave.at),
       result: ["win", "loss"].includes(round.phase) ? round.phase : null, best: [...best],
       selfId: "local", players: { local: { connected: true, x: 0, z: 0 } },
     }),
@@ -430,6 +462,8 @@
       const body = round.inkBody;
       return {
         entities: round.bees.length + round.dogs.length, tick: round.ticks, bounces: round.bounces,
+        activeBees: round.bees.filter(bee => bee.delay <= round.elapsed).length,
+        activeHeavyBees: round.bees.filter(bee => bee.heavy && bee.delay <= round.elapsed).length,
         dogs: round.dogs.map(({x, y}) => ({x, y})),
         platforms: round.platforms.map(({x, y}) => ({x, y})),
         shield: body && { x: body.x, y: body.y, angle: body.angle },
