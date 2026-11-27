@@ -14,7 +14,7 @@ const PALETTES = {
 
 const LEVELS = [
   {
-    name: "第一道防线", theme: "晴日花田", palette: "morning", time: 6, ink: 520,
+    name: "第一道防线", theme: "晴日花田", palette: "morning", time: 10, ink: 520,
     copy: "松手后墨线会落下。让拱门两脚踩稳草地，才能挡住蜂群。",
     hint: "沿虚线画出拱门，让两端稳稳接地。",
     dogs: [{ x: 476, y: 443 }], hives: [{ x: 234, y: 193, count: 6 }],
@@ -23,7 +23,7 @@ const LEVELS = [
     gold: 305, silver: 410,
   },
   {
-    name: "高台上的汪", theme: "苔草山坡", palette: "spring", time: 6.5, ink: 445,
+    name: "高台上的汪", theme: "苔草山坡", palette: "spring", time: 10, ink: 445,
     copy: "小狗在高台上。把高台当作防线的一部分。",
     hint: "从平台的一侧起笔，绕过头顶后接回平台。",
     dogs: [{ x: 647, y: 335 }], hives: [{ x: 305, y: 326, count: 8 }],
@@ -32,7 +32,7 @@ const LEVELS = [
     gold: 265, silver: 350,
   },
   {
-    name: "两面来蜂", theme: "双蜂山谷", palette: "noon", time: 7, ink: 402,
+    name: "两面来蜂", theme: "双蜂山谷", palette: "noon", time: 10, ink: 402,
     copy: "两边的蜂巢都会出动。留意防线另一侧的缺口。",
     hint: "从小狗的一边绕到另一边，落笔处也要封住。",
     dogs: [{ x: 450, y: 443 }], hives: [{ x: 168, y: 204, count: 5 }, { x: 745, y: 249, count: 6 }],
@@ -41,7 +41,7 @@ const LEVELS = [
     gold: 273, silver: 340,
   },
   {
-    name: "有风的桥", theme: "东风坡", palette: "wind", time: 7.5, ink: 405, wind: 46,
+    name: "有风的桥", theme: "东风坡", palette: "wind", time: 10, ink: 405, wind: 46,
     copy: "风会把蜜蜂吹向两侧。桥下的蜜蜂也能飞上来。",
     hint: "桥是实心的，把线的两端接到桥面上。",
     dogs: [{ x: 470, y: 309 }], hives: [{ x: 265, y: 401, count: 7 }, { x: 673, y: 186, count: 6 }],
@@ -50,7 +50,7 @@ const LEVELS = [
     gold: 267, silver: 338,
   },
   {
-    name: "双汪集合", theme: "杏色草原", palette: "apricot", time: 8, ink: 627,
+    name: "双汪集合", theme: "杏色草原", palette: "apricot", time: 10, ink: 627,
     copy: "这次要保护两只小狗。它们可以共用一条防线。",
     hint: "画一座大一点的拱门，把两只小狗都罩住。",
     dogs: [{ x: 333, y: 443 }, { x: 552, y: 443, brown: true }],
@@ -60,7 +60,7 @@ const LEVELS = [
     gold: 480, silver: 555,
   },
   {
-    name: "黄昏大营救", theme: "月升花谷", palette: "dusk", time: 9, ink: 575, wind: 68,
+    name: "黄昏大营救", theme: "月升花谷", palette: "dusk", time: 10, ink: 575, wind: 68,
     copy: "三座蜂巢、两只小狗。用一笔和横桥封住所有来路。",
     hint: "把横桥当作防线的底边，两只小狗一起围起来。",
     dogs: [{ x: 347, y: 329, brown: true }, { x: 552, y: 329 }],
@@ -70,7 +70,7 @@ const LEVELS = [
     gold: 459, silver: 543,
   },
   {
-    name: "上下夹击", theme: "落日石桥", palette: "canyon", challenge: true, time: 9, ink: 515,
+    name: "上下夹击", theme: "落日石桥", palette: "canyon", challenge: true, time: 10, ink: 515,
     copy: "两只小狗分别在桥上和桥下。让防线靠稳桥边，用一笔封住两个入口。",
     hint: "先护住桥上的小狗，再沿桥的右缘往下画，把线落在右下的矮台上。",
     dogs: [{ x: 453, y: 295 }, { x: 471, y: 443, brown: true }],
