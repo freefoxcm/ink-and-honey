@@ -354,7 +354,7 @@
       const body = round.inkBody;
       return {
         entities: round.bees.length + round.level.dogs.length, tick: round.ticks, bounces: round.bounces,
-        shield: body && { x: body.x, y: body.y, angle: body.angle },
+        shield: body && { x: body.x, y: body.y, angle: body.angle, flex: body.flex },
       };
     },
     sendAction(action) {

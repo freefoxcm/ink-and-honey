@@ -240,20 +240,31 @@ function makePainter(canvas) {
     if (dashed) ctx.setLineDash([7, 10]);
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
-    for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
+    for (let index = 1; index < points.length; index++) {
+      ctx.lineTo(points[index].x, points[index].y);
+    }
     if (points.length === 1) ctx.lineTo(points[0].x + .01, points[0].y);
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
   function particles(effects) {
+    ctx.lineCap = "round";
     for (const effect of effects) {
+      const normal = Math.atan2(effect.ny, effect.nx);
+      ctx.globalAlpha = 1 - effect.age / RULES.impactDuration;
       for (let index = 0; index < 4; index++) {
-        const a = effect.id + index * 1.57;
-        const r = 8 + effect.age * 52;
-        const size = Math.max(.4, 2.3 - effect.age * 5);
-        ctx.globalAlpha = Math.max(0, 1 - effect.age / .39);
-        oval(ctx, effect.x + Math.cos(a) * r, effect.y + Math.sin(a) * r, size, size, "#fff1a7");
+        const a = normal + (index - 1.5) * .57;
+        const r = 7 + effect.age * (53 + index * 9);
+        const length = Math.max(2, 8 - effect.age * 17);
+        const dx = Math.cos(a);
+        const dy = Math.sin(a);
+        ctx.strokeStyle = index % 2 ? "#9b5c2c" : "#fff2b8";
+        ctx.lineWidth = 3.3;
+        ctx.beginPath();
+        ctx.moveTo(effect.x + dx * r, effect.y + dy * r);
+        ctx.lineTo(effect.x + dx * (r + length), effect.y + dy * (r + length));
+        ctx.stroke();
       }
     }
     ctx.globalAlpha = 1;
