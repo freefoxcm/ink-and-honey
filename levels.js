@@ -1,6 +1,7 @@
 "use strict";
 
 const BOARD = Object.freeze({ width: 900, height: 560, ground: 478 });
+const PORTRAIT_BOARD = Object.freeze({ width: 540, height: 810, ground: 728 });
 
 const PALETTES = {
   jungle: { sky: "#dce8c2", horizon: "#c6dfb3", far: "#a5bd87", near: "#7c9e74", meadow: "#c0c990", grass: "#7c985d", soil: "#a77e4f", deep: "#74583d" },

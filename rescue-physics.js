@@ -24,7 +24,7 @@ function rescueSpikeTeeth({ kind, left, right, y, height, count }) {
 function touchesRescueHazard(round, dog, radius) {
   const { kind, left, right } = round.level.rescue.hazard;
   const y = rescueHazardY(round);
-  if (dog.y - radius > BOARD.height) return true;
+  if (dog.y - radius > round.board.height) return true;
   if (dog.y + radius < y || dog.x + radius < left || dog.x - radius > right) return false;
   if (kind !== "spikes") return true;
 

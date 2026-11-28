@@ -1,13 +1,24 @@
 "use strict";
 
-function makePainter(canvas) {
+function boardViewport(width, height, board) {
+  const scale = Math.min(width / board.width, height / board.height);
+  return {
+    scale,
+    x: (width - board.width * scale) / 2,
+    y: (height - board.height * scale) * .7,
+  };
+}
+
+function makePainter(canvas, createSurface, motion) {
   const ctx = canvas.getContext("2d");
-  const backdrop = document.createElement("canvas");
-  backdrop.width = BOARD.width;
-  backdrop.height = BOARD.height;
+  const backdrop = createSurface();
   const bg = backdrop.getContext("2d");
-  const motion = matchMedia("(prefers-reduced-motion: reduce)");
+  let board;
   let previousLevel;
+  let previousWidth;
+  let previousHeight;
+  let camera;
+  let scenery;
 
   function path(target, d, fill, stroke, width = 1) {
     const shape = new Path2D(d);
@@ -38,13 +49,13 @@ function makePainter(canvas) {
     };
   }
 
-  function cloud(x, y, scale) {
-    bg.save();
-    bg.translate(x, y);
-    bg.scale(scale, scale);
-    path(bg, "M-57 12Q-59 1-44-1Q-43-17-26-18Q-17-37 7-29Q24-27 29-12Q47-15 53-2Q70 1 67 12Q65 18 51 18H-43Q-54 18-57 12Z", "#fff8e2ae");
-    path(bg, "M-34 11h62m8 0h10", null, "#fffbee7a", 2);
-    bg.restore();
+  function cloud(target, x, y, scale) {
+    target.save();
+    target.translate(x, y);
+    target.scale(scale, scale);
+    path(target, "M-57 12Q-59 1-44-1Q-43-17-26-18Q-17-37 7-29Q24-27 29-12Q47-15 53-2Q70 1 67 12Q65 18 51 18H-43Q-54 18-57 12Z", "#fff8e2ae");
+    path(target, "M-34 11h62m8 0h10", null, "#fffbee7a", 2);
+    target.restore();
   }
 
   function flower(x, y, scale, color) {
@@ -60,14 +71,14 @@ function makePainter(canvas) {
     bg.restore();
   }
 
-  function tree(x, y, scale, color) {
-    bg.save();
-    bg.translate(x, y);
-    bg.scale(scale, scale);
-    path(bg, "M-3 3Q2-25-1-71H4Q7-30 5 3Z", "#6f8062");
-    path(bg, "M4-26Q-26-13-43-35Q-53-54-31-63Q-30-90-10-89Q8-113 30-91Q48-88 47-68Q66-45 45-32Q30-19 4-26Z", color);
-    path(bg, "M5-32Q8-47 4-69M5-48Q17-58 26-59M5-52Q-6-64-17-64", null, "#f1edca43", 2.2);
-    bg.restore();
+  function tree(target, x, y, scale, color) {
+    target.save();
+    target.translate(x, y);
+    target.scale(scale, scale);
+    path(target, "M-3 3Q2-25-1-71H4Q7-30 5 3Z", "#6f8062");
+    path(target, "M4-26Q-26-13-43-35Q-53-54-31-63Q-30-90-10-89Q8-113 30-91Q48-88 47-68Q66-45 45-32Q30-19 4-26Z", color);
+    path(target, "M5-32Q8-47 4-69M5-48Q17-58 26-59M5-52Q-6-64-17-64", null, "#f1edca43", 2.2);
+    target.restore();
   }
 
   function earth(target, box, palette) {
@@ -87,34 +98,61 @@ function makePainter(canvas) {
     }
   }
 
+  function landscape(target, chapterId, paletteId, width, height, ground) {
+    const palette = PALETTES[paletteId];
+    const sky = target.createLinearGradient(0, 0, 0, ground);
+    sky.addColorStop(0, palette.sky);
+    sky.addColorStop(.77, palette.horizon);
+    target.fillStyle = sky;
+    target.fillRect(0, 0, width, height);
+    const scaleX = width / BOARD.width;
+    const scaleY = ground / BOARD.ground;
+    const size = Math.min(1, scaleX * 1.3);
+    const placeOval = (x, y, rx, ry, color, angle) => oval(target, x * scaleX, y * scaleY, rx * size, ry * size, color, angle);
+    const placeCloud = (x, y, scale) => cloud(target, x * scaleX, y * scaleY, scale * size);
+    const dusk = paletteId === "dusk";
+    placeOval(668, 126, 60, 59, dusk ? "#fff1d04c" : "#ffedaf7f");
+    placeOval(668, 126, 42, 41, dusk ? "#fcf0cf" : "#ffedb0");
+    placeOval(658, 115, 27, 16, "#fff8d553", -.42);
+    placeCloud(140, 119, 1.03);
+    placeCloud(369, 156, .62);
+    placeCloud(806, 144, .59);
+    placeCloud(520, 86, .49);
+    target.save();
+    target.scale(width / BOARD.width, ground / BOARD.ground);
+    path(target, "M321 116q7-6 13 1q7-7 13-2m14 12q5-5 10 0q5-5 9-2", null, "#526d625b", 1.5);
+    path(target, "M0 275C104 205 178 268 275 255S418 189 531 233S692 218 769 213Q832 209 900 256V478H0Z", palette.far);
+    path(target, "M0 314Q130 286 220 324T435 307Q538 265 660 306T900 284V478H0Z", palette.near);
+    chapterLandmarks(target, chapterId, palette);
+    tree(target, 35, 361, .99, palette.near);
+    tree(target, 76, 342, .63, palette.near);
+    tree(target, 875, 376, 1.54, palette.near);
+    tree(target, 817, 350, .85, palette.near);
+    path(target, "M0 376C105 347 190 351 285 373S460 384 537 369S702 345 793 365Q857 376 900 358V488H0Z", palette.meadow);
+    path(target, "M0 416Q126 381 250 416T484 424T705 402T900 411M0 455Q30 451 72 453M712 447Q800 430 900 438", null, "#fff3c07a", 2);
+    path(target, "M94 390q25-7 60-7m15-1h19m578-4q30 3 62 0", null, "#56695142", 2);
+    target.restore();
+  }
+
+  function mapLandscape(chapter) {
+    const tile = createSurface();
+    tile.width = 420;
+    tile.height = 330;
+    landscape(tile.getContext("2d"), chapter.id, chapter.palette, tile.width, tile.height, tile.height + 15);
+    return tile;
+  }
+
   function habitat(round) {
     const { level } = round;
     const palette = PALETTES[level.palette];
     const random = randomizer(31 + (level.chapterLevel ?? LEVELS.indexOf(level)) * 913);
-    const sky = bg.createLinearGradient(0, 0, 0, BOARD.ground);
-    sky.addColorStop(0, palette.sky);
-    sky.addColorStop(.77, palette.horizon);
-    bg.fillStyle = sky;
-    bg.fillRect(0, 0, BOARD.width, BOARD.height);
-    const dusk = level.palette === "dusk";
-    oval(bg, 668, 126, 60, 59, dusk ? "#fff1d04c" : "#ffedaf7f");
-    oval(bg, 668, 126, 42, 41, dusk ? "#fcf0cf" : "#ffedb0");
-    oval(bg, 658, 115, 27, 16, "#fff8d553", -.42);
-    cloud(140, 119, 1.03);
-    cloud(369, 156, .62);
-    cloud(806, 144, .59);
-    cloud(520, 86, .49);
-    path(bg, "M321 116q7-6 13 1q7-7 13-2m14 12q5-5 10 0q5-5 9-2", null, "#526d625b", 1.5);
-    path(bg, "M0 275C104 205 178 268 275 255S418 189 531 233S692 218 769 213Q832 209 900 256V478H0Z", palette.far);
-    path(bg, "M0 314Q130 286 220 324T435 307Q538 265 660 306T900 284V478H0Z", palette.near);
-    chapterLandmarks(level.chapterId, palette);
-    tree(35, 361, .99, palette.near);
-    tree(76, 342, .63, palette.near);
-    tree(875, 376, 1.54, palette.near);
-    tree(817, 350, .85, palette.near);
-    path(bg, "M0 376C105 347 190 351 285 373S460 384 537 369S702 345 793 365Q857 376 900 358V488H0Z", palette.meadow);
-    path(bg, "M0 416Q126 381 250 416T484 424T705 402T900 411M0 455Q30 451 72 453M712 447Q800 430 900 438", null, "#fff3c07a", 2);
-    path(bg, "M94 390q25-7 60-7m15-1h19m578-4q30 3 62 0", null, "#56695142", 2);
+    const { left, top, width, height } = scenery;
+    bg.save();
+    bg.translate(left, top);
+    landscape(bg, level.chapterId, level.palette, width, height, board.ground - top);
+    bg.restore();
+    bg.save();
+    bg.scale(board.width / BOARD.width, board.ground / BOARD.ground);
     for (let i = 0; i < 155; i++) {
       const x = random() * 900;
       const y = 379 + random() * 96;
@@ -127,16 +165,21 @@ function makePainter(canvas) {
         null, i % 3 ? "#667c5152" : "#f9f4ce78", 1.3);
       }
     }
+    bg.restore();
     for (const pit of level.pits ?? []) {
-      const shade = bg.createLinearGradient(0, BOARD.ground, 0, pit.bottom);
+      const shade = bg.createLinearGradient(0, board.ground, 0, pit.bottom);
       shade.addColorStop(0, "#72584038");
       shade.addColorStop(1, "#70533d97");
       bg.fillStyle = shade;
-      bg.fillRect(pit.x, BOARD.ground, pit.width, pit.bottom - BOARD.ground);
+      bg.fillRect(pit.x, board.ground, pit.width, pit.bottom - board.ground);
     }
-    for (const ground of round.ground) {
+    const decorativeGround = [
+      { x: left, w: -left, y: board.ground, h: top + height - board.ground },
+      { x: board.width, w: left + width - board.width, y: board.ground, h: top + height - board.ground },
+    ].filter(ground => ground.w > 0);
+    for (const ground of [...round.ground, ...decorativeGround]) {
       bg.fillStyle = ground.pitFloor ? palette.deep : palette.soil;
-      bg.fillRect(ground.x, ground.y, ground.w, ground.h);
+      bg.fillRect(ground.x, ground.y, ground.w, Math.max(ground.h, top + height - ground.y));
       bg.fillStyle = ground.pitFloor ? palette.soil : palette.grass;
       bg.fillRect(ground.x, ground.y, ground.w, ground.pitFloor ? 5 : 9);
       for (let x = ground.x + 14; x < ground.x + ground.w - 10; x += 24) {
@@ -145,59 +188,59 @@ function makePainter(canvas) {
       }
     }
     rescueScenery(round, palette);
-    for (let i = 0; i < 23; i++) {
-      const x = i * 41 + random() * 30;
-      if (x > 260 && x < 640) continue;
+    for (let x = random() * 25; x < board.width; x += 26 + random() * 16) {
+      if (x > board.width * .29 && x < board.width * .71) continue;
       if (level.pits?.some(pit => x > pit.x - 8 && x < pit.x + pit.width + 8)) continue;
       if (level.chapterId !== "snow" && level.chapterId !== "volcano") {
-        flower(x, 482, .54 + random() * .45, i % 3 === 0 ? "#d08259" : "#fff6d7");
+        flower(x, board.ground + 4, .54 + random() * .45, random() < .33 ? "#d08259" : "#fff6d7");
       }
     }
     for (let i = 0; i < 19500; i++) {
-      const x = random() * 900;
-      const y = random() * 560;
+      const x = left + random() * width;
+      const y = top + random() * height;
       bg.fillStyle = i % 3 ? "#fff9e91f" : "#4b453119";
       bg.fillRect(x, y, 1 + random() * 1.3, 1 + random() * .7);
     }
   }
 
-  function chapterLandmarks(chapterId, palette) {
+  function chapterLandmarks(target, chapterId, palette) {
     switch (chapterId) {
       case "jungle":
-        path(bg, "M0 0H900V43Q852 77 803 48Q762 97 708 54Q652 95 585 53Q530 82 470 39Q404 78 334 42Q279 93 209 56Q152 100 101 55Q52 80 0 56Z", "#73966c6b");
-        path(bg, "M0 0H278Q229 45 171 31Q129 62 78 35Q39 61 0 43ZM655 0H900V39Q853 70 803 38Q743 68 703 34Q677 36 655 0Z", "#52785877");
-        path(bg, "M54 27Q80 150 12 310H0Q49 181 23 23M850 28Q823 176 895 313H900Q862 172 881 21", "#76966d65");
+        path(target, "M0 0H900V43Q852 77 803 48Q762 97 708 54Q652 95 585 53Q530 82 470 39Q404 78 334 42Q279 93 209 56Q152 100 101 55Q52 80 0 56Z", "#73966c6b");
+        path(target, "M0 0H278Q229 45 171 31Q129 62 78 35Q39 61 0 43ZM655 0H900V39Q853 70 803 38Q743 68 703 34Q677 36 655 0Z", "#52785877");
+        path(target, "M54 27Q80 150 12 310H0Q49 181 23 23M850 28Q823 176 895 313H900Q862 172 881 21", "#76966d65");
         break;
       case "lake":
-        path(bg, "M0 306Q150 282 320 306T626 295T900 292V371Q762 353 644 361T322 353T0 373Z", "#afcfc8");
-        path(bg, "M24 326Q91 318 141 326M237 333Q318 324 378 331M486 314Q535 307 576 314M690 336Q764 326 815 333", null, "#dcece2", 2);
+        path(target, "M0 306Q150 282 320 306T626 295T900 292V371Q762 353 644 361T322 353T0 373Z", "#afcfc8");
+        path(target, "M24 326Q91 318 141 326M237 333Q318 324 378 331M486 314Q535 307 576 314M690 336Q764 326 815 333", null, "#dcece2", 2);
         break;
       case "cliff":
-        path(bg, "M0 175L107 142L175 184L189 282L231 312L231 383H0ZM699 382V296L744 250L754 173L849 147L900 160V382Z", "#a697847f");
-        path(bg, "M0 216L97 201L173 226M18 262L118 246L184 265M758 211L833 190L900 195M727 277L818 232L900 247", null, "#d6c7ae", 3);
+        path(target, "M0 175L107 142L175 184L189 282L231 312L231 383H0ZM699 382V296L744 250L754 173L849 147L900 160V382Z", "#a697847f");
+        path(target, "M0 216L97 201L173 226M18 262L118 246L184 265M758 211L833 190L900 195M727 277L818 232L900 247", null, "#d6c7ae", 3);
         break;
       case "snow":
-        path(bg, "M0 362L178 134L241 209L349 104L449 232L571 120L714 259L811 174L900 266V386H0Z", "#b8c9d7");
-        path(bg, "M138 186L178 134L224 188L183 171L158 192ZM308 144L349 104L397 166L358 146L344 160L333 145ZM533 157L571 120L629 177L583 163L564 177ZM785 205L811 174L851 222L817 208L805 220Z", "#f4f7ef");
+        path(target, "M0 362L178 134L241 209L349 104L449 232L571 120L714 259L811 174L900 266V386H0Z", "#b8c9d7");
+        path(target, "M138 186L178 134L224 188L183 171L158 192ZM308 144L349 104L397 166L358 146L344 160L333 145ZM533 157L571 120L629 177L583 163L564 177ZM785 205L811 174L851 222L817 208L805 220Z", "#f4f7ef");
         for (const [x, y, size] of [[53, 367, 64], [86, 360, 49], [817, 367, 66], [850, 360, 46]]) {
-          path(bg, `M${x} ${y - size}l${size * .34} ${size * .68}h${-size * .18}l${size * .29} ${size * .32}h${-size * .9}l${size * .29} ${-size * .32}h${-size * .18}Z`, palette.near);
+          path(target, `M${x} ${y - size}l${size * .34} ${size * .68}h${-size * .18}l${size * .29} ${size * .32}h${-size * .9}l${size * .29} ${-size * .32}h${-size * .18}Z`, palette.near);
         }
         break;
       case "volcano":
-        path(bg, "M0 381L159 239L237 151L296 160L411 282L497 345V391Z", "#b38578");
-        path(bg, "M219 170L237 151L296 160L321 185L277 177L253 167Z", "#95695e");
-        path(bg, "M252 139Q225 123 247 104Q268 86 254 67Q286 83 277 105Q274 122 295 136Z", "#9b80716b");
-        path(bg, "M673 367L755 284L829 253L900 285V385Z", "#bf8d78");
+        path(target, "M0 381L159 239L237 151L296 160L411 282L497 345V391Z", "#b38578");
+        path(target, "M219 170L237 151L296 160L321 185L277 177L253 167Z", "#95695e");
+        path(target, "M252 139Q225 123 247 104Q268 86 254 67Q286 83 277 105Q274 122 295 136Z", "#9b80716b");
+        path(target, "M673 367L755 284L829 253L900 285V385Z", "#bf8d78");
         break;
     }
   }
 
   function riverWater({ left, right, y }) {
-    const water = bg.createLinearGradient(0, y, 0, BOARD.height);
+    const bottom = scenery.top + scenery.height;
+    const water = bg.createLinearGradient(0, y, 0, bottom);
     water.addColorStop(0, "#a6d9c3");
     water.addColorStop(1, "#5da7a8");
     bg.fillStyle = water;
-    bg.fillRect(left, y, right - left, BOARD.height - y);
+    bg.fillRect(left, y, right - left, bottom - y);
     path(bg, `M${left} ${y}H${right}`, null, "#eff0c7", 3);
     const random = randomizer(86);
     for (let index = 0; index < 25; index++) {
@@ -210,7 +253,7 @@ function makePainter(canvas) {
 
   function drawPlank(target, branch) {
     const { x, y, w, h } = branch;
-    const rightBranch = x > BOARD.width / 2 && branch.kind !== "float";
+    const rightBranch = x > board.width / 2 && branch.kind !== "float";
     target.save();
     target.translate(rightBranch ? x + w : x, y);
     if (rightBranch) target.scale(-1, 1);
@@ -246,7 +289,7 @@ function makePainter(canvas) {
     if (hazard?.kind === "spikes") {
       const { left, right, y, height } = hazard;
       bg.fillStyle = "#676551";
-      bg.fillRect(left, y + height, right - left, BOARD.height - y - height);
+      bg.fillRect(left, y + height, right - left, scenery.top + scenery.height - y - height);
       for (const [a, tip, b] of round.rescue.teeth) {
         path(bg, `M${a.x} ${a.y}L${tip.x} ${tip.y}L${b.x} ${b.y}Z`, "#929785", "#414b45", 2);
         path(bg, `M${tip.x} ${tip.y + 7}L${tip.x - 4} ${a.y - 7}`, null, "#e9ecce", 2);
@@ -286,18 +329,19 @@ function makePainter(canvas) {
   function rescueLava(round, age) {
     const { left, right } = round.level.rescue.hazard;
     const y = rescueHazardY(round);
-    const molten = ctx.createLinearGradient(0, y, 0, BOARD.height);
+    const bottom = scenery.top + scenery.height;
+    const molten = ctx.createLinearGradient(0, y, 0, bottom);
     molten.addColorStop(0, "#ffb740");
     molten.addColorStop(.32, "#e9743c");
     molten.addColorStop(1, "#ac4238");
     ctx.fillStyle = molten;
-    ctx.fillRect(left, y, right - left, BOARD.height - y);
+    ctx.fillRect(left, y, right - left, bottom - y);
     path(ctx, `M${left} ${y + 1}H${right}`, null, "#ffe188", 2);
     const time = motion.matches ? 0 : age;
     const span = right - left - 68;
     for (let index = 0; index < 14; index++) {
       const x = left + 11 + (index * 83 + time * (7 + index % 3)) % span;
-      const rippleY = y + 8 + (index * 17) % (BOARD.height - y - 12);
+      const rippleY = y + 8 + (index * 17) % (board.height - y - 12);
       path(ctx, `M${x} ${rippleY}q17-5 40-1`, null, index % 3 ? "#ffce637f" : "#fff0a35e", 2);
     }
   }
@@ -391,9 +435,8 @@ function makePainter(canvas) {
   ];
   const bearOutline = "#563a2c";
 
-  function drawHoneyPot(x = 0, y = 0) {
+  function drawHoneyPot() {
     ctx.save();
-    ctx.translate(x, y);
     path(ctx, "M-12 20Q-15 27-10 32Q0 36 10 32Q15 27 12 20Z", "#6d9088", bearOutline, 2.2);
     path(ctx, "M-13 19Q-13 16 0 15Q13 16 13 19Q12 22 0 22Q-12 22-13 19Z", "#f6b846", bearOutline, 1.8);
     path(ctx, "M5 20q2-2 5-1q1 2 0 5q1 4-2 4q-2-1-1-3q1-2-2-5Z", "#e8a537");
@@ -401,25 +444,20 @@ function makePainter(canvas) {
     ctx.restore();
   }
 
-  function honeyBear(bear, time, phase, injured, stingAge) {
+  function drawBearHead(coat, blinkTime, phase, injured, stingAge, turned) {
     const stung = stingAge !== null;
-    const { fur, shade, light, cream, blush } = bearCoats[bear.brown ? 1 : 0];
+    const { fur, shade, light, cream, blush } = coat;
     const outline = bearOutline;
-    ctx.save();
-    ctx.translate(bear.x, bear.y);
-    oval(ctx, 0, 33, 34, 5.5, "#4c4e343d");
-    path(ctx, "M-25 33Q-31 26-26 15Q-23 5-12 5H13Q24 6 27 16Q32 30 23 33Z", fur, outline, 3);
-    oval(ctx, 0, 23, 16, 12, cream);
-    path(ctx, "M-29 32q1-10 11-8q8 1 7 10h-14q-4 0-4-2m40 2q-1-9 7-10q10-2 11 8q0 2-4 2Z", shade, outline, 2.5);
-    path(ctx, "M-22 32v-2m5 2v-2m34 2v-2m5 2v-2", null, "#d6ae876f", 1.5);
-
-    const breathing = motion.matches ? 0 : Math.sin(time * 3.15 + bear.x) * .85;
-    ctx.save();
-    ctx.translate(0, breathing);
-    for (const x of [-25, 25]) {
-      oval(ctx, x, -34, 12.6, 13.5, outline);
-      oval(ctx, x, -34, 10, 11, shade);
-      oval(ctx, x, -34, 6.1, 6.6, "#d99981");
+    if (turned) ctx.scale(.95, 1);
+    for (const side of [-1, 1]) {
+      const farEar = turned && side === 1;
+      ctx.save();
+      ctx.translate(side * (farEar ? 22 : 25), farEar ? -32 : -34);
+      if (farEar) ctx.scale(.86, .86);
+      oval(ctx, 0, 0, 12.6, 13.5, outline);
+      oval(ctx, 0, 0, 10, 11, shade);
+      oval(ctx, 0, 0, 6.1, 6.6, "#d99981");
+      ctx.restore();
     }
     const face = ctx.createLinearGradient(0, stung ? -42 : -37, 0, 19);
     if (stung) {
@@ -433,16 +471,21 @@ function makePainter(canvas) {
     const forehead = stung ? puffedForehead(stingAge) : "Q-16-35-7-36L-5-39Q-2-41 1-36L6-39L10-35Q27-33 32-18";
     path(ctx, `M-33-10Q-32-25-19-32${forehead}Q40-2 28 9Q19 18 0 18Q-21 18-30 8Q-37 2-33-10Z`, face, outline, 3.1);
     if (stung) drawStingStars(stingAge);
-    oval(ctx, -21, 0, 5.5, 3.2, "#db8d7580", -.18);
-    oval(ctx, 21, 0, 5.5, 3.2, "#db8d7580", .18);
+    oval(ctx, turned ? -15 : -21, 0, 5.5, 3.2, "#db8d7580", -.18);
+    oval(ctx, turned ? 24 : 21, 0, turned ? 3.5 : 5.5, 3.2, "#db8d7580", .18);
+    ctx.save();
+    if (turned) {
+      ctx.translate(8, 0);
+      ctx.scale(.88, 1);
+    }
     oval(ctx, 0, 5, 16, 11, cream);
-    const blinking = !motion.matches && (time + bear.x * .015) % 4.2 < .13;
+    const blinking = !motion.matches && blinkTime % 4.2 < .13;
     if (injured) {
       path(ctx, "M-20-16l7 3l-7 3m40-6l-7 3l7 3", null, outline, 2.5);
     } else if (phase === "win" || blinking) {
       path(ctx, "M-19-12q4-5 8 0m22 0q4-5 8 0", null, outline, 2.7);
     } else {
-      oval(ctx, -15, -12.5, 2.8, 4.1, outline);
+      oval(ctx, -15, -12.5, turned ? 3.4 : 2.8, 4.1, outline);
       oval(ctx, 15, -12.5, 2.8, 4.1, outline);
       oval(ctx, -14.4, -13.8, .85, 1, "#fff5dc");
       oval(ctx, 15.6, -13.8, .85, 1, "#fff5dc");
@@ -456,54 +499,100 @@ function makePainter(canvas) {
     path(ctx, "M8 8q4-3 7 0q0 3-2 4q0 6-3 6q-3 0-3-3l1-3q-2-2 0-4Z", "#e8a537");
     path(ctx, "M9 8q1-1 3-1", null, "#fff1a5", 1.3);
     ctx.restore();
+  }
+
+  function honeyBear(bear, time, phase, injured, stingAge, movement = null) {
+    const coat = bearCoats[bear.brown ? 1 : 0];
+    const { fur, shade, light, cream } = coat;
+    const falling = movement?.falling ?? false;
+    ctx.save();
+    ctx.translate(bear.x, bear.y);
+    if (!falling) oval(ctx, 0, 33, 34, 5.5, "#4c4e343d");
+    ctx.scale(movement?.facing ?? 1, 1);
+    if (falling && !motion.matches) {
+      ctx.rotate(.1);
+      if (bear.patrol) {
+        const stretch = .76 + .24 * clamp(bear.vy / 150, 0, 1);
+        ctx.translate(0, 30);
+        ctx.scale(1, stretch);
+        ctx.translate(0, -30);
+      }
+    }
+
+    path(ctx, "M-25 33Q-31 26-26 15Q-23 5-12 5H13Q24 6 27 16Q32 30 23 33Z", fur, bearOutline, 3);
+    oval(ctx, 0, 23, 16, 12, cream);
+    for (const side of [-1, 1]) {
+      ctx.save();
+      if (falling) ctx.translate(3, side === 1 ? -5 : -3);
+      ctx.scale(-side, 1);
+      path(ctx, "M-29 32q1-10 11-8q8 1 7 10h-14q-4 0-4-2Z", shade, bearOutline, 2.5);
+      path(ctx, "M-22 32v-2m5 2v-2", null, "#d6ae876f", 1.5);
+      ctx.restore();
+    }
+
+    const breathing = motion.matches ? 0 : Math.sin(time * 3.15 + bear.x) * .85;
+    ctx.save();
+    ctx.translate(0, breathing);
+    drawBearHead(coat, time + bear.x * .015, phase, injured, stingAge, Boolean(movement));
+    ctx.restore();
 
     drawHoneyPot();
-    path(ctx, "M-17 19q5-2 7 3q2 5-3 6q-5 0-6-4q-1-3 2-5Zm34 0q-5-2-7 3q-2 5 3 6q5 0 6-4q1-3-2-5Z", light, outline, 2);
+    path(ctx, "M-17 19q5-2 7 3q2 5-3 6q-5 0-6-4q-1-3 2-5Zm34 0q-5-2-7 3q-2 5 3 6q5 0 6-4q1-3-2-5Z", light, bearOutline, 2);
     ctx.restore();
   }
 
-  function honeyBearProfile(bear, facing, stride, falling) {
-    const { fur, shade, light, cream } = bearCoats[bear.brown ? 1 : 0];
-    const swing = stride === null ? 0 : Math.sin(stride) * 7;
-    const lift = stride === null ? 0 : Math.cos(stride) * 4.5;
+  function crawlingBear(bear, time, facing, stride) {
+    const coat = bearCoats[bear.brown ? 1 : 0];
+    const { fur, shade, light } = coat;
+    const step = motion.matches ? 0 : Math.sin(stride);
+    const heel = motion.matches ? 0 : Math.cos(stride);
+    const dip = Math.abs(step) * 2.4;
+    const frontX = 9 - step * 7;
+    const frontY = 33 - Math.max(0, -heel) * 5;
+    const hindX = -26 + step * 6;
+    const hindY = 33 - Math.max(0, heel) * 5;
+    const farX = -21 - step * 5;
+    const farY = 32 - Math.max(0, -heel) * 4;
     ctx.save();
     ctx.translate(bear.x, bear.y);
     ctx.scale(facing, 1);
-    if (!falling) oval(ctx, -3, 34, 28, 4, "#4c4e343d");
-    if (falling && !motion.matches) ctx.rotate(.13);
+    oval(ctx, -1, 33, 39, 4.5, "#4c4e343d");
 
-    for (const [hip, alternate, color] of [[3, -1, shade], [-15, 1, fur]]) {
-      const x = hip + alternate * swing + (falling ? 5 : 0);
-      const y = 31 - Math.max(0, alternate * lift) - (falling ? 5 : 0);
-      path(ctx, `M${hip} 17Q${hip - 4} 26 ${x - 4} ${y - 1}Q${x - 2} ${y + 3} ${x + 7} ${y + 2}` +
-        `Q${x + 12} ${y + 1} ${x + 8} ${y - 4}L${hip + 7} 17Z`, color, bearOutline, 2.5);
-    }
+    path(ctx, `M-29 15Q-32 24 ${farX - 7} ${farY - 3}Q${farX - 3} ${farY + 1} ${farX + 6} ${farY}
+      Q${farX + 12} ${farY - 1} ${farX + 7} ${farY - 6}L-16 15Z`, shade, bearOutline, 2.3);
+    const coatGradient = ctx.createLinearGradient(0, -12, 0, 33);
+    coatGradient.addColorStop(0, light);
+    coatGradient.addColorStop(1, fur);
+    path(ctx, `M-39 11Q-39-6-22-10Q-6-13 13-2Q25 4 20 15
+      Q19 21 ${frontX + 5} ${frontY - 8}
+      Q${frontX + 14} ${frontY - 5} ${frontX + 12} ${frontY - 2}
+      Q${frontX + 10} ${frontY + 1} ${frontX + 2} ${frontY}
+      Q${frontX - 6} ${frontY} ${frontX - 8} 25
+      Q-10 30 ${hindX + 7} 25
+      Q${hindX + 14} ${hindY - 3} ${hindX + 9} ${hindY - 1}
+      Q${hindX + 3} ${hindY + 1} ${hindX - 5} ${hindY - 1}
+      Q${hindX - 12} ${hindY - 2}-36 23Q-39 19-39 11Z`, coatGradient, bearOutline, 2.8);
+    path(ctx, "M-33 9Q-30-2-18-5", null, "#f2d4a675", 2);
+    path(ctx, `M-26 13Q${hindX + 1} 17 ${hindX + 7} 25M-1 14Q1 20 ${frontX - 8} 25`, null, shade, 1.5);
+    path(ctx, `M${hindX + 3} ${hindY - 2}v-2m4 1v-2M${frontX + 4} ${frontY - 2}v-2m4 1v-2`, null, "#d6ae876f", 1.4);
 
-    const bob = stride === null ? 0 : -Math.abs(Math.sin(stride)) * 1.8;
-    ctx.translate(0, bob);
-    oval(ctx, -25, 17, 5, 5.6, shade);
-    path(ctx, "M-25 21Q-29 3-14 1Q-3-5 10 4Q20 12 17 23Q10 30-7 28Q-19 29-25 21Z", fur, bearOutline, 3);
-    oval(ctx, 5, 18, 10, 8.5, cream, .25);
-    drawHoneyPot(21, -2);
-    path(ctx, "M-11 13Q-6 9 4 16Q13 21 19 18Q24 17 26 22Q25 27 17 27Q1 27-10 22Q-16 18-11 13Z", light, bearOutline, 2.4);
+    ctx.save();
+    ctx.translate(34, 9 + dip * .65);
+    ctx.rotate(-.16);
+    ctx.scale(.65, .65);
+    drawHoneyPot();
+    ctx.restore();
 
-    oval(ctx, 6, -34, 10, 11.5, bearOutline);
-    oval(ctx, 6, -34, 7.4, 8.7, shade);
-    oval(ctx, 6, -34, 4.5, 5.4, "#d99981");
-    oval(ctx, -16, -34, 11.5, 12.5, bearOutline);
-    oval(ctx, -16, -34, 8.8, 10, fur);
-    oval(ctx, -16, -34, 5.4, 6.4, "#d99981");
-    const face = ctx.createLinearGradient(0, -35, 0, 19);
-    face.addColorStop(0, light);
-    face.addColorStop(1, fur);
-    path(ctx, "M-28-12Q-28-28-14-32Q-5-38 6-33Q18-30 23-19Q25-11 34-7Q43-1 35 8Q27 16 7 18Q-15 19-24 9Q-32 3-28-12Z", face, bearOutline, 3.1);
-    path(ctx, "M10 1Q17-7 30-6Q41-4 34 6Q28 13 15 13Q8 10 10 1Z", cream);
-    oval(ctx, 12, -14, 3.3, 4.2, bearOutline);
-    oval(ctx, 13, -15.1, .8, .95, "#fff5dc");
-    oval(ctx, 35, -3, 5.1, 3.9, "#473026", .2);
-    oval(ctx, 6, 0, 5.2, 3, "#db8d7580");
-    path(ctx, "M31 1Q28 10 22 7", null, bearOutline, 1.65);
-    path(ctx, "M23 8Q29 4 30 8Q28 10 27 13Q26 17 23 14Q24 10 23 8Z", "#e8a537");
+    ctx.save();
+    ctx.translate(0, dip * .65);
+    path(ctx, "M12 17Q20 18 24 23Q27 26 30 24Q34 23 34 27Q34 30 30 31Q22 31 17 27Q13 25 12 17Z", fur, bearOutline, 1.9);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(16 + step * 2.5, 10 + dip);
+    ctx.rotate(.06);
+    ctx.scale(.83, .83);
+    drawBearHead(coat, time + bear.x * .015, "playing", false, null, true);
+    ctx.restore();
     ctx.restore();
   }
 
@@ -620,20 +709,35 @@ function makePainter(canvas) {
   }
 
   function paint(round, view) {
-    if (round.level !== previousLevel) {
+    if (round.level !== previousLevel || canvas.width !== previousWidth || canvas.height !== previousHeight) {
+      board = round.board;
+      camera = boardViewport(canvas.width, canvas.height, board);
+      scenery = {
+        left: -camera.x / camera.scale,
+        top: -camera.y / camera.scale,
+        width: canvas.width / camera.scale,
+        height: canvas.height / camera.scale,
+      };
+      backdrop.width = Math.min(3072, Math.ceil(scenery.width));
+      backdrop.height = Math.min(3072, Math.ceil(scenery.height));
+      const scaleX = backdrop.width / scenery.width;
+      const scaleY = backdrop.height / scenery.height;
+      bg.setTransform(scaleX, 0, 0, scaleY, -scenery.left * scaleX, -scenery.top * scaleY);
       habitat(round);
       previousLevel = round.level;
+      previousWidth = canvas.width;
+      previousHeight = canvas.height;
     }
-    ctx.setTransform(canvas.width / BOARD.width, 0, 0, canvas.height / BOARD.height, 0, 0);
-    ctx.drawImage(backdrop, 0, 0);
+    ctx.setTransform(camera.scale, 0, 0, camera.scale, camera.x, camera.y);
+    ctx.drawImage(backdrop, scenery.left, scenery.top, scenery.width, scenery.height);
 
     const time = view.age;
     const moving = round.phase === "playing";
     if (round.level.chapterId === "snow") {
       const drift = motion.matches ? 0 : time;
       for (let index = 0; index < 18; index++) {
-        const x = (index * 127 + Math.sin(drift + index) * 5 + BOARD.width) % BOARD.width;
-        const y = (index * 83 + drift * (5 + index % 3)) % 430;
+        const x = (index * 127 + Math.sin(drift + index) * 5 + board.width) % board.width;
+        const y = (index * 83 + drift * (5 + index % 3)) % (board.ground - 48);
         oval(ctx, x, y, 1.3 + index % 3 * .4, 1.3 + index % 3 * .4, "#fffef5b3");
       }
     }
@@ -658,44 +762,26 @@ function makePainter(canvas) {
       ctx.globalAlpha = .31;
       for (let i = 0; i < 4; i++) {
         const offset = ((time * (25 + i * 8) + i * 230) % 1000) - 45;
-        const x = direction > 0 ? offset : BOARD.width - offset;
+        const x = direction > 0 ? offset : board.width - offset;
         const y = 110 + i * 89;
         path(ctx, "M" + x + " " + y + "q24-6 57 0m-8 7h17", null, "#fff8dd", 2);
       }
       ctx.globalAlpha = 1;
     }
-    if (view.hint && !round.points.length && round.phase === "ready") {
-      const points = round.level.guide.map(([x, y]) => ({ x, y }));
-      if (view.hint === 2) inkPath(points, "#576b579b", 6, true);
-      const marks = round.level.rescue ? [points.reduce((low, point) => point.y > low.y ? point : low)] : [points[0], points.at(-1)];
-      if (round.level.rescue) {
-        for (const support of round.platforms.filter(box => box.id)) {
-          path(ctx, `M${support.x + 8} ${support.y - 3}H${support.x + support.w - 8}`, null, "#ffdc7e", 5);
-        }
-        const hazard = round.level.rescue.hazard;
-        if (hazard.kind === "lava") inkPath([{ x: hazard.left, y: hazard.y - hazard.rise },
-          { x: hazard.right, y: hazard.y - hazard.rise }], "#b65542b0", 3, true);
-        if (!round.level.rescue.releaseAt) {
-          const dog = round.dogs[0];
-          inkPath([{ x: dog.x, y: dog.y + 51 }, { x: marks[0].x, y: marks[0].y - 10 }], "#576b579b", 3, true);
-        }
-      }
-      for (const p of marks) {
-        oval(ctx, p.x, p.y, 7.7, 7.7, "#fff3cf");
-        oval(ctx, p.x, p.y, 3.2, 3.2, "#687e58");
-      }
-    }
     if (round.level.rescue) rescueBranch(round);
     dropGuide(round);
     for (const [index, bear] of round.dogs.entries()) {
       const released = index === 0 && round.rescue?.released;
-      const walking = bear.patrol && !released;
-      const falling = released && !round.rescue.supported && bear.vy > 16;
-      if (moving && (walking || falling || Math.abs(bear.vx) > 10)) {
+      const crawling = bear.patrol && !released;
+      const falling = released && !round.rescue.supported && bear.vy >= 0;
+      if (moving && (crawling || falling || Math.abs(bear.vx) > 10)) {
         const origin = round.level.dogs[index];
         const facing = Math.sign(bear.vx) || (origin.patrol?.to < origin.x ? -1 : 1);
-        const stride = walking && !motion.matches ? (bear.x - origin.x) * .27 : null;
-        honeyBearProfile(bear, facing, stride, falling);
+        if (crawling) {
+          crawlingBear(bear, time, facing, (bear.x - origin.x) * facing * .2);
+        } else {
+          honeyBear(bear, time, round.phase, false, null, { facing, falling });
+        }
         continue;
       }
       const stung = round.touched === index;
@@ -728,5 +814,5 @@ function makePainter(canvas) {
     }
   }
 
-  return paint;
+  return { paint, mapLandscape };
 }

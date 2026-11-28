@@ -116,7 +116,7 @@ function inkContacts(body, round) {
     }
     add(0, 1, radius - y);
     add(1, 0, radius - x);
-    add(-1, 0, x + radius - BOARD.width);
+    add(-1, 0, x + radius - round.board.width);
     for (const box of round.terrain) {
       const contact = boxContact(x, y, radius + margin, box);
       if (contact) add(contact.nx, contact.ny, contact.depth - margin, box.vx, box.vy);

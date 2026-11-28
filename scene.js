@@ -1,15 +1,15 @@
 "use strict";
 
-function groundFor(level) {
+function groundFor(level, board) {
   const ground = [];
   let left = -32;
   for (const pit of level.pits ?? []) {
     const right = pit.x + pit.width;
-    ground.push({ x: left, y: BOARD.ground, w: pit.x - left, h: BOARD.height + 32 - BOARD.ground });
-    ground.push({ x: pit.x, y: pit.bottom, w: pit.width, h: BOARD.height + 32 - pit.bottom, pitFloor: true });
+    ground.push({ x: left, y: board.ground, w: pit.x - left, h: board.height + 32 - board.ground });
+    ground.push({ x: pit.x, y: pit.bottom, w: pit.width, h: board.height + 32 - pit.bottom, pitFloor: true });
     left = right;
   }
-  ground.push({ x: left, y: BOARD.ground, w: BOARD.width + 32 - left, h: BOARD.height + 32 - BOARD.ground });
+  ground.push({ x: left, y: board.ground, w: board.width + 32 - left, h: board.height + 32 - board.ground });
   return ground;
 }
 

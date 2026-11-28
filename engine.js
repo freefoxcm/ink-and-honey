@@ -35,11 +35,12 @@ function makeWaves(level) {
 }
 
 function makeRound(level) {
-  const ground = groundFor(level);
+  const board = level.board ?? BOARD;
+  const ground = groundFor(level, board);
   const platforms = level.boxes.map(box => ({ ...box, vx: 0, vy: 0 }));
   const dogs = level.dogs.map(dog => ({ ...dog, vx: 0, vy: 0 }));
   const round = {
-    level, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
+    level, board, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
     ground, platforms, terrain: [...ground, ...platforms], dogs, waves: makeWaves(level),
     time: level.time, elapsed: 0, ticks: 0, stars: 0, touched: -1, bounces: 0,
     rescue: level.rescue ? { released: false, caught: false, supported: false, teeth: rescueSpikeTeeth(level.rescue.hazard) } : null,
@@ -82,7 +83,7 @@ function crossesPatrol(a, b, dog, radius) {
 
 function extendStroke(round, point) {
   const floor = round.ground.find(box => point.x >= box.x && point.x < box.x + box.w);
-  point = { x: point.x, y: Math.min(point.y, (floor?.y ?? BOARD.ground) - RULES.lineRadius) };
+  point = { x: point.x, y: Math.min(point.y, (floor?.y ?? round.board.ground) - RULES.lineRadius) };
   const points = round.points;
   const last = points.at(-1) || point;
   const delta = distance(last, point);
@@ -235,7 +236,7 @@ function moveBee(round, bee, dt) {
   const passes = 2;
   for (let pass = 0; pass < passes; pass++) {
     if (bee.x < r) repel(bee, 1, 0, r - bee.x);
-    if (bee.x > BOARD.width - r) repel(bee, -1, 0, bee.x - BOARD.width + r);
+    if (bee.x > round.board.width - r) repel(bee, -1, 0, bee.x - round.board.width + r);
     if (bee.y < r) repel(bee, 0, 1, r - bee.y);
     for (const box of round.terrain) repelFromBox(bee, box);
     repelFromInk(round, bee);
@@ -276,21 +277,22 @@ function stepRound(round, dt = RULES.step) {
   }
 }
 
-function runEngineChecks() {
-  function simulate(level, route, onStep) {
-    const round = makeRound(level);
-    for (const [x, y] of route) {
-      const event = extendStroke(round, { x, y });
-      if (event === "puppy" || event === "patrol" || event === "terrain") return round;
-    }
-    launchSwarm(round);
-    const limit = Math.ceil(level.time / RULES.step) + 1;
-    for (let ticks = 0; ticks < limit && round.phase === "playing"; ticks++) {
-      stepRound(round);
-      onStep?.(round);
-    }
-    return round;
+function simulate(level, route, onStep) {
+  const round = makeRound(level);
+  for (const [x, y] of route) {
+    const event = extendStroke(round, { x, y });
+    if (event === "puppy" || event === "patrol" || event === "terrain") return round;
   }
+  launchSwarm(round);
+  const limit = Math.ceil(level.time / RULES.step) + 1;
+  for (let ticks = 0; ticks < limit && round.phase === "playing"; ticks++) {
+    stepRound(round);
+    onStep?.(round);
+  }
+  return round;
+}
+
+function runEngineChecks() {
   const references = LEVELS.map(level => simulate(level, level.guide));
   const alternateWins = LEVELS.filter(level => level.challenge).map(level => simulate(level, level.alternate));
   const rectangleWins = LEVELS.map(level => {
