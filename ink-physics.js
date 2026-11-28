@@ -5,10 +5,14 @@ const INK_PHYSICS = Object.freeze({
   density: .0075,
   beeMass: .85,
   friction: .20,
+  iceFriction: .08,
   contactMargin: .4,
   penetrationSlop: .12,
   sampleSpacing: 6,
 });
+
+const BRANCH_WARNING_TIME = .3;
+const BRANCH_BREAK_TIME = .9;
 
 function simplifyInk(points, start = 0, end = points.length - 1, result = [points[0]]) {
   let split = -1;
@@ -110,16 +114,18 @@ function inkContacts(body, round) {
     const ry = sample.x * sin + sample.y * cos;
     const x = body.x + rx;
     const y = body.y + ry;
-    function add(nx, ny, depth, vx = 0, vy = 0) {
+    function add(nx, ny, depth, vx = 0, vy = 0, box) {
       if (depth < -margin) return;
-      contacts.push({ nx, ny, depth, vx, vy, rx: rx - radius * nx, ry: ry - radius * ny, normalImpulse: 0, tangentImpulse: 0 });
+      const ice = box?.iceFrom !== undefined && ny < -.25 && x >= box.x + box.w * box.iceFrom;
+      contacts.push({ nx, ny, depth, vx, vy, box, ice, rx: rx - radius * nx, ry: ry - radius * ny,
+        normalImpulse: 0, tangentImpulse: 0 });
     }
     add(0, 1, radius - y);
     add(1, 0, radius - x);
     add(-1, 0, x + radius - round.board.width);
     for (const box of round.terrain) {
       const contact = boxContact(x, y, radius + margin, box);
-      if (contact) add(contact.nx, contact.ny, contact.depth - margin, box.vx, box.vy);
+      if (contact) add(contact.nx, contact.ny, contact.depth - margin, box.vx, box.vy, box);
     }
     for (let index = round.rescue?.released ? 1 : 0; index < round.dogs.length; index++) {
       // The falling bear exchanges impulses with the ink after it moves.
@@ -150,7 +156,27 @@ function inkSpeedAt(body, rx, ry, dx, dy) {
   return (body.vx - body.spin * ry) * dx + (body.vy + body.spin * rx) * dy;
 }
 
-function resolveInkTerrain(body, round) {
+function updateFragileSupports(round, contacts, dt) {
+  if (!round.fragilePlatforms.length) return;
+  const loads = new Map();
+  // Only the vertical component of the solved contact impulse carries weight.
+  for (const { box, ny, normalImpulse } of contacts) {
+    if (box?.loadLimit === undefined || ny >= 0) continue;
+    loads.set(box, (loads.get(box) ?? 0) - ny * normalImpulse / dt);
+  }
+  const blend = 1 - Math.exp(-dt / .15);
+  for (const box of round.fragilePlatforms) {
+    if (box.brokenAt !== undefined) continue;
+    box.load = (box.load ?? 0) + ((loads.get(box) ?? 0) - (box.load ?? 0)) * blend;
+    box.overload = Math.max(0, (box.overload ?? 0) + (box.load > box.loadLimit ? dt : -2 * dt));
+    if (box.overload >= BRANCH_BREAK_TIME) {
+      box.brokenAt = round.elapsed;
+      round.terrain = round.terrain.filter(platform => platform !== box);
+    }
+  }
+}
+
+function resolveInkTerrain(body, round, dt) {
   const friction = round.level.rescue?.friction ?? INK_PHYSICS.friction;
   for (let iteration = 0; iteration < 6; iteration++) {
     let deepest = null;
@@ -185,24 +211,26 @@ function resolveInkTerrain(body, round) {
 
       const oldTangent = contact.tangentImpulse;
       const tangentSpeed = inkSpeedAt(body, rx, ry, -ny, nx) - contact.tangentSpeed;
-      const limit = friction * contact.normalImpulse;
+      const limit = (contact.ice ? INK_PHYSICS.iceFriction : friction) * contact.normalImpulse;
       contact.tangentImpulse = clamp(oldTangent - tangentSpeed / inverseInkMass(body, rx, ry, -ny, nx), -limit, limit);
       const tangent = contact.tangentImpulse - oldTangent;
       pushInk(body, rx, ry, -tangent * ny, tangent * nx);
     }
   }
+  updateFragileSupports(round, contacts, dt);
 }
 
 function stepInk(round, dt) {
   const body = round.inkBody;
   const drag = Math.exp(-.25 * dt);
-  body.vx = clamp(body.vx * drag, -440, 440);
+  const wind = round.level.wind?.inkFactor ? windAt(round.level, round.elapsed) * round.level.wind.inkFactor : 0;
+  body.vx = clamp(body.vx * drag + wind * dt, -440, 440);
   body.vy = clamp(body.vy * drag + INK_PHYSICS.gravity * dt, -440, 440);
   body.spin = clamp(body.spin * drag, -body.maxSpin, body.maxSpin);
   body.x += body.vx * dt;
   body.y += body.vy * dt;
   body.angle += body.spin * dt;
-  resolveInkTerrain(body, round);
+  resolveInkTerrain(body, round, dt);
 
   const cos = Math.cos(body.angle);
   const sin = Math.sin(body.angle);

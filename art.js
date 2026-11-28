@@ -263,6 +263,39 @@ function makePainter(canvas, createSurface, motion) {
     target.restore();
   }
 
+  function drawIceSurface(target, box) {
+    if (box.iceFrom === undefined) return;
+    const left = box.x + box.w * box.iceFrom;
+    const right = box.x + box.w;
+    const y = box.y;
+    path(target, `M${left} ${y + 1}H${right - 3}Q${right} ${y + 1} ${right} ${y + 4}V${y + 8}
+      H${left + 3}Q${left} ${y + 7} ${left} ${y + 4}Z`, "#a1d9ec", "#4c819d", 1.4);
+    path(target, `M${left + 4} ${y + 2}H${right - 4}M${left + 10} ${y + 5}l6 -2
+      M${right - 19} ${y + 6}l8 -3`, null, "#f3fcff", 1.6);
+  }
+
+  function drawFragileBranch(branch, elapsed) {
+    const age = branch.brokenAt === undefined ? null : elapsed - branch.brokenAt;
+    if (age !== null && (motion.matches || age > .42)) return;
+    const warning = branch.overload >= BRANCH_WARNING_TIME;
+    ctx.save();
+    if (age !== null) {
+      ctx.translate(0, age * age * 235);
+      ctx.globalAlpha = 1 - age / .42;
+    } else if (warning && !motion.matches) {
+      ctx.translate(Math.sin(elapsed * 58) * 1.5, 0);
+    }
+    drawPlank(ctx, branch);
+    const x = branch.x + branch.w * .46;
+    const y = branch.y + 2;
+    path(ctx, `M${x} ${y}l3 5-4 3 3 ${warning ? 7 : 3}`,
+      null, warning ? "#a3332d" : "#624534", warning ? 2.8 : 2);
+    if (warning) {
+      path(ctx, `M${x + 3} ${y + 5}l7 -4M${x - 1} ${y + 8}l-6 6`, null, "#ffd47a", 2);
+    }
+    ctx.restore();
+  }
+
   function drawRock(target, rock) {
     const { x, y, w, h } = rock;
     const isLedge = rock.kind === "ledge";
@@ -296,7 +329,7 @@ function makePainter(canvas, createSurface, motion) {
       }
       path(bg, `M${left} ${y + height}H${right}`, null, "#444c47", 4);
     }
-    const platforms = round.platforms.filter(box => !box.travel);
+    const platforms = round.platforms.filter(box => !box.travel && box.loadLimit === undefined);
     for (const box of platforms.filter(box => !box.kind)) earth(bg, box, palette);
     for (const [index, box] of platforms.filter(box => box.kind === "trunk").entries()) {
       const { x, y, w, h } = box;
@@ -324,6 +357,7 @@ function makePainter(canvas, createSurface, motion) {
       path(bg, `M${x + 6} ${y + 5}h${w - 19}m-${w - 20} ${h - 12}q15-4 ${w - 22} -1`, null, "#f2cf92", 2);
     }
     for (const rock of platforms.filter(box => box.kind === "cliff" || box.kind === "ledge")) drawRock(bg, rock);
+    for (const box of platforms) drawIceSurface(bg, box);
   }
 
   function rescueLava(round, age) {
@@ -343,6 +377,14 @@ function makePainter(canvas, createSurface, motion) {
       const x = left + 11 + (index * 83 + time * (7 + index % 3)) % span;
       const rippleY = y + 8 + (index * 17) % (board.height - y - 12);
       path(ctx, `M${x} ${rippleY}q17-5 40-1`, null, index % 3 ? "#ffce637f" : "#fff0a35e", 2);
+    }
+    const { rise = 0, markCrest } = round.level.rescue.hazard;
+    const crest = round.level.rescue.hazard.y - rise;
+    if (markCrest && y > crest + 3) {
+      ctx.save();
+      ctx.setLineDash([7, 7]);
+      path(ctx, `M${left + 5} ${crest}H${right - 5}`, null, "#863f31d0", 2);
+      ctx.restore();
     }
   }
 
@@ -599,15 +641,28 @@ function makePainter(canvas, createSurface, motion) {
   function beeSprite(bee, time, scale = 1) {
     ctx.save();
     ctx.translate(bee.x, bee.y);
+    const charging = bee.type === "charge";
+    const scout = bee.type === "scout";
+    if (bee.charge) {
+      ctx.save();
+      ctx.rotate(bee.charge.angle);
+      if (bee.charge.stage === "windup") {
+        path(ctx, "M17-6l6 6-6 6M25-6l6 6-6 6", null, "#963d24", 3);
+      } else if (!motion.matches) {
+        path(ctx, "M-34-5h15m-10 6h10m-14 6h16", null, "#b35931a8", 2);
+      }
+      ctx.restore();
+    }
     ctx.scale(Math.sign(bee.vx) || 1, 1);
     ctx.rotate(clamp(bee.vy / 210, -.5, .5));
-    const size = scale * (bee.heavy ? 1.29 : 1);
+    const size = scale * (charging ? 1.4 : bee.heavy ? 1.29 : scout ? .76 : 1);
     ctx.scale(size, size);
     const wing = motion.matches ? 1 : Math.sin(time * 59 + bee.id * 2) * .46 + 1;
-    oval(ctx, -3, -6, 5.1, 6.5 * wing, "#fff8dcda", -.46);
-    oval(ctx, 2, -7, 4.5, 5.7 * wing, "#fff8dcee", .39);
+    oval(ctx, -3, -6, 5.1, 6.5 * wing, scout ? "#d7f3e8ed" : "#fff8dcda", -.46);
+    oval(ctx, 2, -7, 4.5, 5.7 * wing, scout ? "#e5fffaed" : "#fff8dcee", .39);
     path(ctx, "M-8 0l-4 3l4 2", "#5e4230", "#5e4230", 1);
-    path(ctx, "M-9 2C-9-6 8-7 10 0C12 9-8 11-9 2Z", bee.heavy ? "#e99c45" : "#ffc85b", "#624335", 1.75);
+    const bodyColor = charging ? "#e68144" : bee.heavy ? "#e99c45" : scout ? "#f6da78" : "#ffc85b";
+    path(ctx, "M-9 2C-9-6 8-7 10 0C12 9-8 11-9 2Z", bodyColor, "#624335", 1.75);
     path(ctx, "M-5-3Q-7 1-5 6m5-10q-2 5 0 11", null, "#78533b", 2.1);
     oval(ctx, 6, 0, 1.45, 1.6, "#4b3627");
     ctx.restore();
@@ -685,13 +740,19 @@ function makePainter(canvas, createSurface, motion) {
   function movingPlatforms(round) {
     const palette = PALETTES[round.level.palette];
     for (const box of round.platforms) {
+      if (box.loadLimit !== undefined) {
+        drawFragileBranch(box, round.elapsed);
+        continue;
+      }
       if (!box.travel) continue;
       if (box.kind === "float") {
         drawPlank(ctx, box);
+        drawIceSurface(ctx, box);
         continue;
       }
       if (box.kind === "ledge") {
         drawRock(ctx, box);
+        drawIceSurface(ctx, box);
         continue;
       }
       ctx.save();
@@ -705,6 +766,7 @@ function makePainter(canvas, createSurface, motion) {
       oval(ctx, 7, box.h / 2 + 1, 2.2, 2.2, "#f4d294");
       oval(ctx, box.w - 7, box.h / 2 + 1, 2.2, 2.2, "#f4d294");
       ctx.restore();
+      drawIceSurface(ctx, box);
     }
   }
 
@@ -754,7 +816,8 @@ function makePainter(canvas, createSurface, motion) {
       drawHive(hive, time, moving);
       if (!ready) continue;
       const angle = motion.matches ? index * 2 : time * 1.13 + index * 2.4;
-      beeSprite({ x: hive.x + Math.cos(angle) * 55, y: hive.y + 8 + Math.sin(angle) * 24, vx: -Math.sin(angle), vy: 0, id: index }, time, .87);
+      beeSprite({ x: hive.x + Math.cos(angle) * 55, y: hive.y + 8 + Math.sin(angle) * 24,
+        vx: -Math.sin(angle), vy: 0, id: index, type: hive.special }, time, .87);
     }
     if (round.level.wind && !motion.matches) {
       const strength = windAt(round.level, round.elapsed);

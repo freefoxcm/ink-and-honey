@@ -21,7 +21,7 @@ function shuttleMotion(elapsed, period, phase = 0) {
 function updateScene(round) {
   round.platforms.forEach((platform, index) => {
     const { travel } = platform;
-    if (!travel) return;
+    if (!travel || platform.brokenAt !== undefined) return;
     const origin = round.level.boxes[index];
     const { position, speed } = shuttleMotion(round.elapsed, travel.period, travel.phase);
     platform.x = origin.x + (travel.dx ?? 0) * position;

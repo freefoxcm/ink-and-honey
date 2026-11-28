@@ -9,6 +9,11 @@
   const saveKey = "ink-and-honey-progress-v2";
   const oldSaveKey = "ink-and-honey-progress-v1";
   const stingMessage = "哎呀，小熊被蛰到了！";
+  const beeBadges = {
+    heavy: { label: "重蜂", mark: "⬢" },
+    charge: { label: "冲锋蜂", mark: "冲锋" },
+    scout: { label: "钻缝蜂", mark: "钻缝" },
+  };
   const stingRevealSeconds = 1.05;
   const previewSaveKey = "ink-and-honey-jungle-preview-v1";
   const lockIcon = '<svg class="node-lock" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="5" width="7" height="6" rx="1" fill="currentColor"/><path d="M4 5V3.6a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
@@ -18,7 +23,7 @@
     result: byId("result"), resultCard: byId("result-card"), next: byId("result-next"), retry: byId("result-retry"),
     timer: byId("timer-label"), ink: byId("ink-label"), fill: byId("ink-fill"),
     meter: byId("ink-meter"), notice: byId("notice"),
-    announce: byId("announcement"), help: byId("round-help"),
+    announce: byId("announcement"), help: byId("round-help"), rule: byId("round-rule"),
     wind: byId("wind-indicator"), windArrow: byId("wind-arrow"),
     waves: byId("waves"),
   };
@@ -252,8 +257,12 @@
     byId("round-number").textContent = chapter.name + " · 第 " + round.level.chapterLevel + " 关";
     byId("round-title").textContent = round.level.name;
     ui.wind.hidden = !round.level.wind;
-    ui.help.textContent = round.level.rescue?.releaseAt ? "在脚印尽头的下方画好吊床，松手让小熊出发。" :
+    previousWind = undefined;
+    const instruction = round.level.rescue?.releaseAt ? "在脚印尽头的下方画好吊床，松手让小熊出发。" :
       round.rescue ? "借地形撑住墨线，再把线画到小熊下方。" : "按住拖动来画线，松手后蜂群就会出发。";
+    ui.rule.textContent = round.level.ruleNote ?? "";
+    ui.rule.hidden = !round.level.ruleNote;
+    ui.help.textContent = instruction + (round.level.ruleNote ?? "");
     updateHud();
     resizeCanvas();
     paint(round, view);
@@ -273,7 +282,7 @@
       }));
       const directions = locations.size > 1 ? "多向" : [...locations][0];
       const arrows = { 左上: "↖", 上: "↑", 右上: "↗", 左下: "↙", 下: "↓", 右下: "↘", 多向: "✦" };
-      const hasHeavy = wave.launches.some(launch => launch.heavy);
+      const types = [...new Set(wave.launches.map(launch => launch.special ?? (launch.heavy ? "heavy" : null)).filter(Boolean))];
       const bee = document.createElement("img");
       bee.className = "wave-icon";
       bee.alt = "";
@@ -288,15 +297,16 @@
       arrow.setAttribute("aria-hidden", "true");
       arrow.textContent = arrows[directions];
       node.append(bee, number, timing, arrow);
-      const label = "第 " + (index + 1) + " 波 · " + wave.at + " 秒 · " + directions + (hasHeavy ? " · 重蜂" : "");
+      const label = ["第 " + (index + 1) + " 波", wave.at + " 秒", directions,
+        ...types.map(type => beeBadges[type].label)].join(" · ");
       node.setAttribute("aria-label", label);
       node.title = label;
-      if (hasHeavy) {
-        const heavy = document.createElement("span");
-        heavy.className = "wave-heavy";
-        heavy.setAttribute("aria-hidden", "true");
-        heavy.textContent = "⬢";
-        node.append(heavy);
+      for (const type of types) {
+        const badge = document.createElement("span");
+        badge.className = "wave-type";
+        badge.setAttribute("aria-hidden", "true");
+        badge.textContent = beeBadges[type].mark;
+        node.append(badge);
       }
       return node;
     });
@@ -330,8 +340,11 @@
       const direction = reversing ? "↔" : velocity > 4 ? "→" : velocity < -4 ? "←" : "·";
       if (direction !== previousWind) {
         ui.windArrow.textContent = direction;
-        ui.wind.setAttribute("aria-label", reversing ? "本关风向会反转" :
-          direction === "→" ? "风向右吹" : direction === "←" ? "风向左吹" : "风暂时减弱");
+        const label = reversing ? "本关风向会反转" :
+          direction === "→" ? "风向右吹" : direction === "←" ? "风向左吹" : "风暂时减弱";
+        const forecast = label + (round.level.wind.inkFactor ? "，风也会推墨线" : "");
+        ui.wind.setAttribute("aria-label", forecast);
+        ui.wind.title = forecast;
         previousWind = direction;
       }
     }
@@ -385,6 +398,7 @@
       return;
     }
     ui.notice.hidden = true;
+    ui.rule.hidden = true;
     ui.help.textContent = round.level.rescue?.releaseAt ? "小熊正沿脚印走向断口。" :
       round.rescue ? "接住小熊，守到倒计时归零。" : "蜂群出发了，小心防线被撞歪！";
     announce(ui.help.textContent);
@@ -412,11 +426,24 @@
       missed: ["吊床没接住小熊", "让线从小熊正下方经过。"],
     };
     const loss = rescueLoss[round.failure] ?? rescueLoss.missed;
+    let advice = rescue ? loss[1] : "试试让防线靠稳地形。";
+    if (round.failure === "bees") {
+      if (round.stungBy === "charge") advice = "冲锋蜂蓄力后会直撞。让墨线靠住土柱或地面。";
+      else if (round.stungBy === "scout") advice = "钻缝蜂会沿墨线找开口。试试把线尾贴近岩沿。";
+      else if (round.level.beeLossAdvice) advice = round.level.beeLossAdvice;
+    }
+    if (round.fragilePlatforms.some(box => box.brokenAt !== undefined)) {
+      advice = "细枝断了。试试少画一点，或把重量分到结实的木桩上。";
+    } else if (round.level.wind?.inkFactor) {
+      advice = "风会推墨线。试试借粗糙的岩沿稳住防线，给滑动的雪台留出余量。";
+    } else if (round.platforms.some(box => box.iceFrom !== undefined)) {
+      advice = "冰面会滑。试试让墨线靠住粗糙的岩沿。";
+    }
     const title = won ? (finished ? "全员安全！" : "小熊安全啦！") : rescue ? loss[0] : stingMessage;
     byId("result-title").textContent = title;
     byId("result-copy").textContent = won
       ? "用了 " + used + "% 的墨水，拿到 " + round.stars + " 颗星。"
-      : "撑了 " + round.elapsed.toFixed(1) + " 秒。" + (rescue ? loss[1] : "试试让防线靠稳地形。");
+      : "撑了 " + round.elapsed.toFixed(1) + " 秒。" + advice;
     ui.retry.textContent = won ? "再画一笔" : "再试一次";
     ui.help.textContent = won ? (finished ? "六个场景已全部通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
     ui.next.hidden = nextLevel === -1;
@@ -574,11 +601,15 @@
       lag += dt;
       const bounces = round.bounces;
       const wasReleased = round.rescue?.released;
+      const elapsed = round.elapsed;
       while (lag >= RULES.step && round.phase === "playing") {
         stepRound(round);
         lag -= RULES.step;
       }
       if (round.bounces !== bounces) audio.effect("bounce");
+      if (round.fragilePlatforms.some(box => box.brokenAt > elapsed) && round.phase === "playing") {
+        notify("细枝断了，墨线失去了一处支撑。");
+      }
       if (round.level.rescue?.releaseAt && !wasReleased && round.rescue.released && round.phase === "playing") {
         ui.help.textContent = "小熊从断口落下了，守到倒计时归零。";
         announce(ui.help.textContent);
@@ -609,7 +640,7 @@
       levelId: round?.level.id, group: round && round.level.groupIndex + 1,
       mode: "adventure", chapterId: round?.level.chapterId, chapterLevel: round?.level.chapterLevel,
       wave: activeWave + 1, waveTimes: round?.waves.map(wave => wave.at) ?? [],
-      result: ["win", "loss"].includes(round?.phase) ? round.phase : null, failure: round?.failure,
+      result: ["win", "loss"].includes(round?.phase) ? round.phase : null, failure: round?.failure, stungBy: round?.stungBy,
       best: LEVELS.map(level => best[level.id] ?? 0),
       rescueBest: best[RESCUE_LEVELS[0].id] ?? 0,
       rescueProgress: RESCUE_LEVELS.map(level => best[level.id] ?? 0),
@@ -624,8 +655,11 @@
         entities: round.bees.length + round.dogs.length, tick: round.ticks, bounces: round.bounces,
         activeBees: round.bees.filter(bee => bee.delay <= round.elapsed).length,
         activeHeavyBees: round.bees.filter(bee => bee.heavy && bee.delay <= round.elapsed).length,
+        specialBees: round.bees.filter(bee => bee.type && bee.delay <= round.elapsed)
+          .map(bee => ({ type: bee.type, stage: bee.charge?.stage })),
         dogs: round.dogs.map(({x, y}) => ({x, y})),
         platforms: round.platforms.map(({x, y}) => ({x, y})),
+        fragile: round.fragilePlatforms.map(({ id, overload = 0, brokenAt }) => ({ id, overload, brokenAt })),
         shield: body && { x: body.x, y: body.y, angle: body.angle },
         hammock: round.rescue ? { supports: rescueSupports(round), caught: round.rescue.caught, released: round.rescue.released } : null,
         hazard: round.rescue ? { kind: round.level.rescue.hazard.kind, y: rescueHazardY(round) } : null,

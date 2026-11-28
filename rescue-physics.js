@@ -107,7 +107,7 @@ function rescueSupports(round) {
   if (!body) return [];
   const cos = Math.cos(body.angle);
   const sin = Math.sin(body.angle);
-  return round.platforms.filter(box => box.id && body.samples.some(sample => {
+  return round.platforms.filter(box => box.id && box.brokenAt === undefined && body.samples.some(sample => {
     const x = body.x + sample.x * cos - sample.y * sin;
     const y = body.y + sample.x * sin + sample.y * cos;
     return boxContact(x, y, RULES.lineRadius + 1, box)?.ny < -0.15;

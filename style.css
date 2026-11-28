@@ -321,10 +321,24 @@ button:focus-visible, canvas:focus-visible { outline: 3px solid #98601d; outline
   align-items: center;
   gap: 6px;
 }
-.round-waves {
+.round-details {
   grid-column: 1 / -1;
-  justify-self: end;
   display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.round-rule {
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--art-paper-sign) center / 100% 100% no-repeat, var(--art-paper-fill);
+  color: #493621;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.round-waves {
+  display: flex;
+  flex: none;
+  margin-inline-start: auto;
   align-items: flex-start;
   gap: 6px;
 }
@@ -418,8 +432,8 @@ button:focus-visible, canvas:focus-visible { outline: 3px solid #98601d; outline
     linear-gradient(var(--ink), var(--ink)) center / 86% 75% no-repeat;
   color: #fff5d3;
 }
-.wave-heavy { color: var(--gold); font-weight: 750; }
-.waves [aria-current="step"] .wave-heavy { color: var(--honey); }
+.wave-type { color: var(--gold); font-weight: 750; }
+.waves [aria-current="step"] .wave-type { color: var(--honey); }
 .result-scrim {
   position: absolute;
   inset: 0;

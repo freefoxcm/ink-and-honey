@@ -13,6 +13,8 @@ const RULES = Object.freeze({
   hiveWarning: .7,
 });
 
+const CHARGE = Object.freeze({ range: 185, windup: .52, speed: 225, duration: .48, recovery: 2.25 });
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -29,7 +31,7 @@ function makeWaves(level) {
   const waves = times.map(at => ({ at, launches: [] }));
   level.hives.forEach((hive, hiveIndex) => {
     const index = hive.wave ?? Math.min(hiveIndex, waves.length - 1);
-    waves[index].launches.push({ hiveIndex, count: hive.count, heavy: Boolean(hive.heavy) });
+    waves[index].launches.push({ hiveIndex, count: hive.count, heavy: Boolean(hive.heavy && !hive.special), special: hive.special });
   });
   return waves;
 }
@@ -42,6 +44,7 @@ function makeRound(level) {
   const round = {
     level, board, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
     ground, platforms, terrain: [...ground, ...platforms], dogs, waves: makeWaves(level),
+    fragilePlatforms: platforms.filter(box => box.loadLimit !== undefined),
     time: level.time, elapsed: 0, ticks: 0, stars: 0, touched: -1, bounces: 0,
     rescue: level.rescue ? { released: false, caught: false, supported: false, teeth: rescueSpikeTeeth(level.rescue.hazard) } : null,
     failure: null,
@@ -122,15 +125,17 @@ function launchSwarm(round) {
   round.phase = "playing";
   if (round.rescue && !round.level.rescue.releaseAt) round.rescue.released = true;
   for (const wave of round.waves) {
-    for (const { hiveIndex, count, heavy } of wave.launches) {
+    for (const { hiveIndex, count, heavy, special } of wave.launches) {
       const hive = round.level.hives[hiveIndex];
-      for (let index = 0; index < count + Number(heavy); index++) {
+      for (let index = 0; index < count + Number(Boolean(heavy || special)); index++) {
         const id = round.bees.length;
         const yaw = index * 2.39996 + hiveIndex;
+        const type = index === 0 ? special : undefined;
+        const isHeavy = index === 0 && heavy;
         round.bees.push({
           id, x: hive.x, y: hive.y + 5, vx: Math.cos(yaw) * 34, vy: Math.sin(yaw) * 34,
-          delay: wave.at + index * .14, heavy: heavy && index === 0, turn: id % 2 ? 1 : -1,
-          radius: RULES.beeRadius + (heavy && index === 0 ? 2 : 0),
+          delay: wave.at + index * .14, heavy: isHeavy, type, turn: id % 2 ? 1 : -1,
+          radius: type === "scout" ? 5 : RULES.beeRadius + (isHeavy || type === "charge" ? 2 : 0),
           wall: 0, normalX: 0, normalY: 0, flash: 0,
         });
       }
@@ -167,6 +172,7 @@ function repelFromInk(round, bee) {
   const radius = bee.radius + RULES.lineRadius;
   let separation = radius;
   let contact = null;
+  let segment = 0;
   for (let index = 1; index < points.length; index++) {
     const a = points[index - 1];
     const b = points[index];
@@ -177,6 +183,7 @@ function repelFromInk(round, bee) {
     if (gap < separation) {
       separation = gap;
       contact = p;
+      segment = index;
     }
   }
   if (!contact) return;
@@ -190,12 +197,21 @@ function repelFromInk(round, bee) {
   const ry = contact.y + ny * RULES.lineRadius - body.y;
   const speed = bee.vx * nx + bee.vy * ny - inkSpeedAt(body, rx, ry, nx, ny);
   if (speed >= 0) return;
-  const inverseBeeMass = 1 / (bee.heavy ? RULES.heavyBeeMass : INK_PHYSICS.beeMass);
+  const mass = bee.type === "scout" ? .48 : bee.heavy || bee.type === "charge" ? RULES.heavyBeeMass : INK_PHYSICS.beeMass;
+  const inverseBeeMass = 1 / mass;
   const impulse = -1.42 * speed / (inverseBeeMass + inverseInkMass(body, rx, ry, nx, ny));
   bee.vx += nx * impulse * inverseBeeMass;
   bee.vy += ny * impulse * inverseBeeMass;
   pushInk(body, rx, ry, -nx * impulse, -ny * impulse);
   turnAlongWall(bee, nx, ny, true);
+  if (bee.type === "scout") {
+    const towardStart = distance(contact, points[0]) < distance(contact, points.at(-1));
+    const a = points[segment - 1];
+    const b = points[segment];
+    const alongWall = -(b.x - a.x) * ny + (b.y - a.y) * nx;
+    bee.turn = (Math.sign(alongWall) || 1) * (towardStart ? -1 : 1);
+    bee.wall = 1.9;
+  }
   if (bee.flash <= 0 && speed < -12) {
     bee.flash = 0.18;
     round.bounces++;
@@ -203,17 +219,42 @@ function repelFromInk(round, bee) {
   }
 }
 
+function steerChargingBee(round, bee, dt, target, angle) {
+  const now = round.elapsed;
+  if (bee.charge?.stage === "rush") {
+    if (now < bee.charge.until && bee.wall === 0) return true;
+    bee.charge = null;
+    bee.chargeReadyAt = now + CHARGE.recovery;
+  }
+  if (!bee.charge && bee.wall === 0 && (bee.chargeReadyAt ?? 0) <= now && distance(bee, target) <= CHARGE.range) {
+    bee.charge = { stage: "windup", until: now + CHARGE.windup, angle };
+  }
+  if (!bee.charge) return false;
+  if (now < bee.charge.until) {
+    const brake = Math.exp(-14 * dt);
+    bee.vx *= brake;
+    bee.vy *= brake;
+    return true;
+  }
+  const aim = bee.charge.angle;
+  bee.charge = { stage: "rush", until: now + CHARGE.duration, angle: aim };
+  bee.vx = Math.cos(aim) * CHARGE.speed + windAt(round.level, now);
+  bee.vy = Math.sin(aim) * CHARGE.speed;
+  return true;
+}
+
 function steerBee(round, bee, dt) {
   const dogs = round.dogs;
   const target = dogs.reduce((best, dog) => distance(bee, dog) < distance(bee, best) ? dog : best);
   const angle = Math.atan2(target.y - bee.y, target.x - bee.x);
+  if (bee.type === "charge" && steerChargingBee(round, bee, dt, target, angle)) return;
   const wander = 0.29 * Math.sin(round.elapsed * 5.5 + bee.id * 1.58);
   let vx = RULES.speed * Math.cos(angle + wander);
   let vy = RULES.speed * Math.sin(angle + wander);
   if (bee.wall > 0) {
     bee.wall = Math.max(0, bee.wall - dt);
     const turn = bee.turn * RULES.speed * 0.88;
-    const pull = bee.followInk ? -9 : 14;
+    const pull = bee.followInk ? (bee.type === "scout" ? 4 : -9) : 14;
     vx = vx * 0.26 - bee.normalY * turn + pull * bee.normalX;
     vy = vy * 0.26 + bee.normalX * turn + pull * bee.normalY;
   }
@@ -260,6 +301,7 @@ function stepRound(round, dt = RULES.step) {
     const touched = round.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + bee.radius);
     if (touched >= 0) {
       round.touched = touched;
+      round.stungBy = bee.type;
       round.failure = "bees";
       round.phase = "loss";
       return;
