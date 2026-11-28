@@ -3,6 +3,11 @@
 const BOARD = Object.freeze({ width: 900, height: 560, ground: 478 });
 
 const PALETTES = {
+  jungle: { sky: "#dce8c2", horizon: "#c6dfb3", far: "#a5bd87", near: "#7c9e74", meadow: "#c0c990", grass: "#7c985d", soil: "#a77e4f", deep: "#74583d" },
+  lake: { sky: "#dcebe0", horizon: "#d3e6dd", far: "#adcbc1", near: "#8bb8ad", meadow: "#c0d9b2", grass: "#859f78", soil: "#a88862", deep: "#696b52" },
+  cliff: { sky: "#e4dfcc", horizon: "#ead8b3", far: "#cab7af", near: "#aa9d87", meadow: "#d2c192", grass: "#a79975", soil: "#a89076", deep: "#756357" },
+  snow: { sky: "#dce8ef", horizon: "#e9e9ed", far: "#c6d3e0", near: "#abbfcd", meadow: "#dce9e9", grass: "#edf4ef", soil: "#a6b6c0", deep: "#7e93a3" },
+  volcano: { sky: "#f2d9bf", horizon: "#f0cbaa", far: "#d2a08c", near: "#b38573", meadow: "#d6a888", grass: "#9f7662", soil: "#a17561", deep: "#74554f" },
   morning: { sky: "#f6e9b9", horizon: "#e5ebc5", far: "#c3d4a9", near: "#a8c397", meadow: "#e4cd84", grass: "#8da575", soil: "#bc9158", deep: "#9a723f" },
   spring: { sky: "#e9eed3", horizon: "#d6e9da", far: "#b0d0ba", near: "#7fae9b", meadow: "#d9d59b", grass: "#799f80", soil: "#a68663", deep: "#796f52" },
   noon: { sky: "#fae8c0", horizon: "#faefcf", far: "#d8d2a1", near: "#bac48c", meadow: "#e7cb7d", grass: "#a3ac70", soil: "#bc8a57", deep: "#997353" },
@@ -23,7 +28,7 @@ const LEGACY_LEVELS = [
     gold: 265, silver: 300,
   },
   {
-    id: "lookout", name: "高台上的汪", theme: "苔草山坡", palette: "spring", ink: 305,
+    id: "lookout", name: "高台上的小熊", theme: "苔草山坡", palette: "spring", ink: 305,
     copy: "高台右侧留给防线的位置很窄，画太宽容易滑出去。",
     hint: "右脚离台边远一点，让它被推滑时还有落脚处。",
     dogs: [{ x: 647, y: 335 }], hives: [{ x: 305, y: 326, count: 8 }],
@@ -34,7 +39,7 @@ const LEGACY_LEVELS = [
   {
     id: "two-hives", name: "两面来蜂", theme: "双蜂山谷", palette: "noon", ink: 315,
     copy: "两边的蜂巢都会出动。留意防线另一侧的缺口。",
-    hint: "从小狗的一边绕到另一边，落笔处也要封住。",
+    hint: "从小熊的一边绕到另一边，落笔处也要封住。",
     dogs: [{ x: 450, y: 443 }], hives: [{ x: 168, y: 204, count: 5 }, { x: 745, y: 387, count: 6 }],
     boxes: [{ x: 123, y: 433, w: 123, h: 45 }, { x: 387, y: 425, w: 43, h: 53 }, { x: 692, y: 416, w: 139, h: 62 }],
     guide: [[381, 478], [382, 427], [399, 390], [427, 375], [457, 374], [485, 386], [506, 413], [518, 446], [519, 478]],
@@ -50,9 +55,9 @@ const LEGACY_LEVELS = [
     gold: 265, silver: 300,
   },
   {
-    id: "puppy-pair", name: "双汪集合", theme: "杏色草原", palette: "apricot", ink: 595,
-    copy: "一只小狗在地上，另一只在高台。用高台和柱子封住防线的右侧。",
-    hint: "左侧贴着草地落脚，绕过两只小狗后，把右脚接到有柱子的位置。",
+    id: "puppy-pair", name: "两只小熊", theme: "杏色草原", palette: "apricot", ink: 595,
+    copy: "一只小熊在地上，另一只在高台。用高台和柱子封住防线的右侧。",
+    hint: "左侧贴着草地落脚，绕过两只小熊后，把右脚接到有柱子的位置。",
     dogs: [{ x: 333, y: 443 }, { x: 552, y: 357, brown: true }],
     hives: [{ x: 175, y: 274, count: 7 }, { x: 738, y: 228, count: 7 }],
     boxes: [{ x: 492, y: 392, w: 162, h: 26 }, { x: 596, y: 418, w: 44, h: 60 }],
@@ -61,8 +66,8 @@ const LEGACY_LEVELS = [
   },
   {
     id: "dusk-rescue", name: "黄昏大营救", theme: "月升花谷", palette: "dusk", ink: 580, wind: { mode: "reversing", strength: 68 },
-    copy: "三座蜂巢、两只小狗。用一笔和横桥封住所有来路。",
-    hint: "把横桥当作防线的底边，两只小狗一起围起来。",
+    copy: "三座蜂巢、两只小熊。用一笔和横桥封住所有来路。",
+    hint: "把横桥当作防线的底边，两只小熊一起围起来。",
     dogs: [{ x: 347, y: 329, brown: true }, { x: 548, y: 314 }],
     hives: [{ x: 157, y: 232, count: 7 }, { x: 741, y: 193, count: 7, heavy: true }, { x: 715, y: 422, count: 6, heavy: true }],
     boxes: [{ x: 247, y: 364, w: 410, h: 31 }, { x: 504, y: 349, w: 101, h: 15 }, { x: 583, y: 307, w: 28, h: 42 }, { x: 87, y: 425, w: 130, h: 53 }],
@@ -71,8 +76,8 @@ const LEGACY_LEVELS = [
   },
   {
     id: "bridge-rescue", name: "上下夹击", theme: "落日石桥", palette: "canyon", ink: 525,
-    copy: "两只小狗分别在桥上和桥下。让防线靠稳桥边，用一笔封住两个入口。",
-    hint: "先护住桥上的小狗，再沿桥的右缘往下画，把线落在右下的矮台上。",
+    copy: "两只小熊分别在桥上和桥下。让防线靠稳桥边，用一笔封住两个入口。",
+    hint: "先护住桥上的小熊，再沿桥的右缘往下画，把线落在右下的矮台上。",
     dogs: [{ x: 453, y: 295 }, { x: 471, y: 443, brown: true }],
     hives: [{ x: 248, y: 213, count: 7 }, { x: 730, y: 186, count: 7, wave: 0 }, { x: 724, y: 382, count: 7, heavy: true }],
     boxes: [
@@ -94,7 +99,7 @@ const LEVEL_GROUPS = [
       {
         id: "narrow-pit", name: "跨过窄坑", theme: "浅沟花田", palette: "apricot", ink: 400,
         copy: "右边少了一块草地。让防线跨过浅坑，两脚都落在实地上。",
-        hint: "从小狗左边绕过头顶，第二只脚落在坑的右岸。",
+        hint: "从小熊左边绕过头顶，第二只脚落在坑的右岸。",
         pits: [{ x: 482, width: 82, bottom: 535 }],
         dogs: [{ x: 451, y: 443 }], hives: [{ x: 222, y: 206, count: 7 }, { x: 709, y: 223, count: 4 }],
         boxes: [{ x: 485, y: 414, w: 40, h: 39 }],
@@ -127,8 +132,8 @@ const LEVEL_GROUPS = [
       },
       {
         id: "reversing-wind", name: "风向掉头", theme: "回风草坡", palette: "noon", ink: 320,
-        copy: "风会来回换向。小狗在窄台上，靠稳两端才能顶住两侧的蜂群。",
-        hint: "让两脚都踩上窄台，给小狗的两侧留出空间。",
+        copy: "风会来回换向。小熊在窄台上，靠稳两端才能顶住两侧的蜂群。",
+        hint: "让两脚都踩上窄台，给小熊的两侧留出空间。",
         wind: { mode: "reversing", strength: 58 },
         dogs: [{ x: 464, y: 341 }], hives: [{ x: 189, y: 300, count: 7 }, { x: 714, y: 241, count: 7 }],
         boxes: [{ x: 363, y: 376, w: 206, h: 40 }, { x: 495, y: 320, w: 32, h: 56 }, { x: 722, y: 421, w: 105, h: 57 }],
@@ -142,10 +147,10 @@ const LEVEL_GROUPS = [
     ],
   },
   {
-    id: "patrol", name: "巡逻小狗", levels: [
+    id: "patrol", name: "巡逻小熊", levels: [
       {
-        id: "first-patrol", name: "散步的小狗", theme: "脚印花田", palette: "morning", ink: 430,
-        copy: "这只小狗会沿脚印往返。把它走得到的地方都罩住。",
+        id: "first-patrol", name: "散步的小熊", theme: "脚印花田", palette: "morning", ink: 430,
+        copy: "这只小熊会沿脚印往返。把它走得到的地方都罩住。",
         hint: "从脚印左边起笔，绕过整条路线，再在右边接地。",
         dogs: [{ x: 416, y: 443, patrol: { to: 501, period: 4.8 } }],
         pits: [{ x: 538, width: 43, bottom: 535 }],
@@ -155,7 +160,7 @@ const LEVEL_GROUPS = [
       },
       {
         id: "ledge-patrol", name: "高台散步", theme: "苔草长台", palette: "spring", ink: 440,
-        copy: "小狗会在高台两端折返，蜜蜂会追着它飞。",
+        copy: "小熊会在高台两端折返，蜜蜂会追着它飞。",
         hint: "沿脚印外画个长拱门，两脚落回高台。",
         dogs: [{ x: 455, y: 316, patrol: { to: 580, period: 4.6 } }],
         hives: [{ x: 227, y: 309, count: 7 }, { x: 755, y: 203, count: 4 }],
@@ -175,7 +180,7 @@ const LEVEL_GROUPS = [
       },
       {
         id: "double-patrol", name: "迎面散步", theme: "杏花平原", palette: "noon", ink: 640,
-        copy: "两只小狗从两头同时出发。别忘了它们折返时也会走到外侧。",
+        copy: "两只小熊从两头同时出发。别忘了它们折返时也会走到外侧。",
         hint: "从最左脚印画到最右脚印，用一条长拱门一起保护。",
         dogs: [{ x: 305, y: 443, patrol: { to: 382, period: 4.7 } }, { x: 608, y: 443, brown: true, patrol: { to: 508, period: 5.4 } }],
         hives: [{ x: 178, y: 211, count: 8 }, { x: 733, y: 283, count: 8 }],
@@ -185,7 +190,7 @@ const LEVEL_GROUPS = [
       },
       {
         id: "bridge-patrol", name: "上下巡逻", theme: "暮色石桥", palette: "dusk", ink: 630,
-        copy: "桥上和桥下都有小狗在走。既要罩住头顶，也要堵住桥下的入口。",
+        copy: "桥上和桥下都有小熊在走。既要罩住头顶，也要堵住桥下的入口。",
         hint: "先罩住桥上的脚印，再沿右边绕下去，接到右侧矮台。",
         dogs: [{ x: 396, y: 295, patrol: { to: 536, period: 4.6 } }, { x: 514, y: 443, brown: true, patrol: { to: 369, period: 5.8 } }],
         hives: [{ x: 196, y: 214, count: 7 }, { x: 736, y: 190, count: 7, heavy: true }, { x: 765, y: 391, count: 8, heavy: true }],
@@ -245,8 +250,8 @@ const LEVEL_GROUPS = [
       },
       {
         id: "crossing-bridges", name: "交错浮桥", theme: "落日双沟", palette: "canyon", ink: 605,
-        copy: "两座平台一升一滑。让防线跨在沟的两侧，护住中间的两只小狗。",
-        hint: "左脚搭在升降台右侧，跨过两只小狗，右脚搭上滑台靠中间的位置。",
+        copy: "两座平台一升一滑。让防线跨在沟的两侧，护住中间的两只小熊。",
+        hint: "左脚搭在升降台右侧，跨过两只小熊，右脚搭上滑台靠中间的位置。",
         pits: [{ x: 137, width: 170, bottom: 549 }, { x: 497, width: 267, bottom: 549 }],
         dogs: [{ x: 340, y: 443 }, { x: 459, y: 443, brown: true }],
         hives: [{ x: 754, y: 196, count: 8 }, { x: 713, y: 447, count: 7, heavy: true }, { x: 151, y: 238, count: 8, heavy: true }],
@@ -275,3 +280,77 @@ const LEVELS = LEVEL_GROUPS.flatMap((group, groupIndex) => group.levels.map((lev
   const pace = BATTLE_PACE[groupIndex];
   return { ...level, groupIndex, challenge, time: pace.time, waveTimes: challenge ? pace.challenge : pace.regular };
 }));
+
+const RESCUE_LEVELS = [{
+  id: "willow-rescue", name: "水上的吊床", theme: "柳荫溪湾", palette: "spring",
+  time: 10, waveTimes: [1.5], ink: 1160, gold: 690, silver: 870,
+  copy: "用树枝挂住墨线，让线接住掉下来的小熊，再挡住左边的蜂群。",
+  hint: "让墨线从蜂巢上方绕过，再搭在树枝上，伸到小熊脚下。",
+  dogs: [{ x: 488, y: 215 }], hives: [{ x: 327, y: 257, count: 8 }],
+  pits: [{ x: 218, width: 524, bottom: BOARD.height }],
+  boxes: [
+    { kind: "trunk", x: 166, y: 123, w: 88, h: 355 },
+    { kind: "trunk", x: 688, y: 111, w: 85, h: 367 },
+    { kind: "branch", id: "left", x: 252, y: 315, w: 188, h: 24 },
+    { kind: "branch", id: "right", x: 573, y: 280, w: 117, h: 22 },
+  ],
+  rescue: {
+    friction: 0.68,
+    hazard: { kind: "water", left: 218, right: 742, y: 449 },
+    perch: { x: 694, material: "wood" },
+  },
+  guide: [[275, 296], [271, 213], [384, 214], [392, 263], [416, 296], [457, 296], [475, 346], [515, 351], [551, 299], [550, 241]],
+}, {
+  id: "thorn-gully", name: "木桩过刺沟", theme: "荆棘林地", palette: "wind",
+  time: 10, waveTimes: [1.5], ink: 1020, gold: 620, silver: 800,
+  copy: "两根短木桩一高一低。留出足够长的一段搭在木桩上，别让接小熊的那一段滑进刺沟。",
+  hint: "从左木桩上方绕过蜂巢，绕到小熊脚下，再往右搭住较低的木桩。",
+  dogs: [{ x: 477, y: 211, brown: true }], hives: [{ x: 312, y: 242, count: 8 }],
+  pits: [{ x: 212, width: 535, bottom: BOARD.height }],
+  boxes: [
+    { kind: "trunk", x: 176, y: 138, w: 78, h: 340 },
+    { kind: "trunk", x: 675, y: 130, w: 80, h: 348 },
+    { kind: "peg", id: "upper-peg", x: 251, y: 300, w: 138, h: 20 },
+    { kind: "peg", id: "lower-peg", x: 561, y: 346, w: 117, h: 20 },
+  ],
+  rescue: {
+    friction: 0.71,
+    hazard: { kind: "spikes", left: 212, right: 747, y: 433, height: 47, count: 15 },
+    perch: { x: 679, material: "wood" },
+  },
+  guide: [[274, 284], [278, 207], [350, 198], [369, 273], [387, 288], [433, 348], [470, 381], [498, 380], [540, 350], [576, 328], [630, 327]],
+}, {
+  id: "ember-bluff", name: "熔岩崖壁", theme: "赤岩裂谷", palette: "canyon",
+  time: 11, waveTimes: [1.6], ink: 1100, gold: 650, silver: 850,
+  copy: "借两侧凸出的岩沿接住小熊。熔岩会慢慢升高，墨线搭得住，也要留足高度。",
+  hint: "把墨线搭在高处的凸岩上，接小熊的部分别垂得太低。",
+  dogs: [{ x: 481, y: 205 }], hives: [{ x: 310, y: 234, count: 8 }],
+  pits: [{ x: 202, width: 540, bottom: BOARD.height }],
+  boxes: [
+    { kind: "cliff", x: 129, y: 143, w: 128, h: 335 },
+    { kind: "cliff", x: 665, y: 126, w: 133, h: 352 },
+    { kind: "ledge", id: "high-shelf", x: 254, y: 285, w: 141, h: 28 },
+    { kind: "ledge", id: "low-shelf", x: 253, y: 392, w: 180, h: 29 },
+    { kind: "ledge", id: "far-shelf", x: 552, y: 313, w: 116, h: 31 },
+  ],
+  rescue: {
+    friction: 0.73,
+    hazard: { kind: "lava", left: 202, right: 742, y: 493, rise: 57 },
+    perch: { x: 669, material: "stone" },
+  },
+  guide: [[273, 270], [275, 199], [346, 191], [365, 257], [391, 270], [425, 316], [460, 359], [503, 367], [544, 339], [571, 294], [645, 296]],
+}, {
+  id: "lone-peg", name: "独木桩救援", theme: "雾谷渡口", palette: "dusk",
+  time: 10, waveTimes: [1.5], ink: 1100, gold: 760, silver: 875,
+  copy: "水面上只有一根木桩。让墨线勾住木桩，试着把接住小熊的那一段悬在它下方。",
+  hint: "从木桩上方绕过，让接小熊的部分悬在木桩下方。左边也要留一段线挡蜂。",
+  dogs: [{ x: 469, y: 238 }], hives: [{ x: 315, y: 234, count: 8 }],
+  pits: [{ x: 0, width: BOARD.width, bottom: BOARD.height }],
+  boxes: [{ kind: "pin", id: "lone-peg", x: 420, y: 145, w: 60, h: 26 }],
+  rescue: {
+    friction: 0.58,
+    hazard: { kind: "water", left: 0, right: BOARD.width, y: 444 },
+    perch: { material: "wood", sling: true },
+  },
+  guide: [[460, 181], [398, 180], [398, 124], [502, 124], [506, 180], [537, 211], [546, 292], [517, 344], [455, 347], [415, 305], [404, 216], [446, 182]],
+}].map(level => ({ ...level, groupIndex: LEVEL_GROUPS.length }));

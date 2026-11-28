@@ -37,11 +37,13 @@ function makeWaves(level) {
 function makeRound(level) {
   const ground = groundFor(level);
   const platforms = level.boxes.map(box => ({ ...box, vx: 0, vy: 0 }));
-  const dogs = level.dogs.map(dog => ({ ...dog, vx: 0 }));
+  const dogs = level.dogs.map(dog => ({ ...dog, vx: 0, vy: 0 }));
   const round = {
     level, phase: "ready", ink: 0, points: [], inkBody: null, bees: [], effects: [],
     ground, platforms, terrain: [...ground, ...platforms], dogs, waves: makeWaves(level),
     time: level.time, elapsed: 0, ticks: 0, stars: 0, touched: -1, bounces: 0,
+    rescue: level.rescue ? { released: false, caught: false, supported: false, teeth: rescueSpikeTeeth(level.rescue.hazard) } : null,
+    failure: null,
   };
   updateScene(round);
   return round;
@@ -90,7 +92,7 @@ function extendStroke(round, point) {
   if (available <= 0.01) return "dry";
   const fraction = delta > available ? available / delta : 1;
   const end = { x: last.x + (point.x - last.x) * fraction, y: last.y + (point.y - last.y) * fraction };
-  const radius = RULES.puppyRadius + RULES.lineRadius;
+  const radius = (round.rescue ? RESCUE_PHYSICS.footRadius : RULES.puppyRadius) + RULES.lineRadius;
   const crossesPuppy = round.dogs.some(dog => distance(dog, nearestPoint(dog.x, dog.y, last, end)) < radius);
   if (crossesPuppy) {
     discardStroke(round);
@@ -117,6 +119,7 @@ function launchSwarm(round) {
   if (round.phase !== "ready" || round.ink < RULES.minInk) return false;
   round.inkBody = createInkBody(round.points);
   round.phase = "playing";
+  if (round.rescue && !round.level.rescue.releaseAt) round.rescue.released = true;
   for (const wave of round.waves) {
     for (const { hiveIndex, count, heavy } of wave.launches) {
       const hive = round.level.hives[hiveIndex];
@@ -246,6 +249,8 @@ function stepRound(round, dt = RULES.step) {
   round.time = Math.max(0, round.level.time - round.elapsed);
   updateScene(round);
   stepInk(round, dt);
+  if (round.rescue?.released) stepRescueDog(round, dt);
+  if (round.phase === "loss") return;
   for (const effect of round.effects) effect.age += dt;
   round.effects = round.effects.filter(effect => effect.age < 0.39);
   for (const bee of round.bees) {
@@ -254,19 +259,25 @@ function stepRound(round, dt = RULES.step) {
     const touched = round.dogs.findIndex(dog => distance(dog, bee) < RULES.puppyRadius + bee.radius);
     if (touched >= 0) {
       round.touched = touched;
+      round.failure = "bees";
       round.phase = "loss";
       return;
     }
   }
   if (round.time <= 1e-9) {
     round.time = 0;
+    if (round.rescue && !round.rescue.caught) {
+      round.failure = "missed";
+      round.phase = "loss";
+      return;
+    }
     round.phase = "win";
     round.stars = round.ink <= round.level.gold ? 3 : round.ink <= round.level.silver ? 2 : 1;
   }
 }
 
 function runEngineChecks() {
-  function simulate(level, route) {
+  function simulate(level, route, onStep) {
     const round = makeRound(level);
     for (const [x, y] of route) {
       const event = extendStroke(round, { x, y });
@@ -274,7 +285,10 @@ function runEngineChecks() {
     }
     launchSwarm(round);
     const limit = Math.ceil(level.time / RULES.step) + 1;
-    for (let ticks = 0; ticks < limit && round.phase === "playing"; ticks++) stepRound(round);
+    for (let ticks = 0; ticks < limit && round.phase === "playing"; ticks++) {
+      stepRound(round);
+      onStep?.(round);
+    }
     return round;
   }
   const references = LEVELS.map(level => simulate(level, level.guide));
@@ -336,6 +350,58 @@ function runEngineChecks() {
     boxes: [{ x: 400, y: 350, w: 150, h: 20, travel: { dy: -55, period: 5.5 } }],
   };
   const lifted = simulate(lift, [[429, 344], [509, 344]]);
+  const [waterRescue, spikeRescue, lavaRescue, lonePeg] = RESCUE_LEVELS;
+  const rescueGuide = waterRescue.guide;
+  const rescueSingleBranch = [
+    rescueGuide,
+    rescueGuide.map(([x, y]) => [x + 6, y + 5]).reverse(),
+    rescueGuide.map(([x, y]) => [x - 5, y - 6]),
+  ].map(route => simulate(waterRescue, route));
+  const rescueTwoBranches = simulate(waterRescue, [
+    [267, 293], [280, 218], [360, 205], [407, 287], [428, 296], [464, 346], [517, 348], [547, 321], [590, 262], [653, 262],
+  ]);
+  const rescueExposed = simulate(waterRescue, [[274, 296], [653, 262]]);
+  const rescueDeep = simulate(waterRescue, [
+    ...rescueGuide.slice(0, 5), [450, 301], [463, 377], [486, 465], [528, 466],
+  ]);
+  const rescueUnsupported = simulate(waterRescue, [[450, 328], [487, 361], [535, 338]]);
+  const newRescueWins = [spikeRescue, lavaRescue].map(level => [level.guide,
+    level.guide.map(([x, y]) => [x + 4, y + 3]).reverse()].map(route => simulate(level, route)));
+  const spikeFall = simulate(spikeRescue, [[450, 331], [484, 368], [521, 332]]);
+  const [leftBase, firstTip] = spikeFall.rescue.teeth[0];
+  const tipHeight = firstTip.y - RESCUE_PHYSICS.footRadius;
+  const actualSpikeContact = touchesRescueHazard(spikeFall, { x: firstTip.x, y: tipHeight }, RESCUE_PHYSICS.footRadius) &&
+    !touchesRescueHazard(spikeFall, { x: leftBase.x, y: tipHeight }, RESCUE_PHYSICS.footRadius);
+  const risingLava = simulate(lavaRescue, [...lavaRescue.guide.slice(0, 5),
+    [426, 314], [451, 370], [454, 471], [531, 471], [552, 386], [548, 336], [570, 296], [642, 295]]);
+  const lonePegWins = [
+    lonePeg.guide,
+    lonePeg.guide.map(([x, y]) => [x + 4, y + 4]).reverse(),
+    [[413, 205], [395, 170], [395, 124], [509, 124], [516, 165], [534, 210], [535, 302], [511, 348],
+      [451, 351], [413, 296], [404, 231], [422, 207], [468, 192], [527, 205]],
+  ].map(route => simulate(lonePeg, route));
+  const slippedOffPeg = simulate(lonePeg, [[470, 133], [532, 136], [599, 190], [633, 285], [572, 361], [478, 370], [437, 316]]);
+  const campaignWins = CAMPAIGN_LEVELS.map(level => simulate(level, level.guide));
+  const challengeAlternateWins = CAMPAIGN_LEVELS.filter(level => level.challenge).map(level => simulate(level, level.alternate));
+  const jungleFinal = JUNGLE_PREVIEW.at(-1);
+  const shiftedJungleWins = [
+    simulate(jungleFinal, jungleFinal.guide.map(([x, y]) => [x + 5, y - 4])),
+    simulate(jungleFinal, jungleFinal.alternate.map(([x, y]) => [x + 4, y + 3]).reverse()),
+  ];
+  const forestDrop = JUNGLE_PREVIEW[3];
+  let sawPatrol = false;
+  let fellFromMarker = false;
+  let dropTime = null;
+  const dropWin = simulate(forestDrop, forestDrop.guide, round => {
+    const [dog] = round.dogs;
+    if (!round.rescue.released && dog.x > forestDrop.dogs[0].x && dog.x < dog.patrol.to && dog.y === forestDrop.dogs[0].y) sawPatrol = true;
+    if (round.rescue.released && dropTime === null) {
+      dropTime = round.elapsed;
+      fellFromMarker = Math.abs(dog.x - dog.patrol.to) < .1 && Math.abs(dog.vx) < .1;
+    }
+  });
+  const forestMiss = simulate(jungleFinal, [[432, 323], [477, 355], [532, 324]]);
+  const reusedIds = new Set(CAMPAIGN_LEVELS.filter(level => !level.challenge).map(level => level.id));
   const waveTimings = references.every(round => round.waves.every(({ at, launches }) =>
     launches.length > 0 && round.bees.some(bee => bee.delay === at) &&
     launches.filter(launch => launch.heavy).length === Number(round.level.challenge && at !== 0) &&
@@ -369,5 +435,45 @@ function runEngineChecks() {
       detail: "The shown patrol blocks drawing through future positions and the dog reaches the shown endpoint." },
     platformLiftsInk: { pass: Math.abs(lifted.inkBody.y - (lifted.platforms[0].y - RULES.lineRadius)) < 2 &&
         lifted.inkBody.y < 300, detail: "The moving collision surface lifts the stroke to its visible position." },
+    rescueSingleBranch: { pass: rescueSingleBranch.every(round => round.phase === "win" && round.rescue.caught &&
+        round.bounces > 0 && rescueSupports(round).join() === "left"),
+      detail: "The same shape wins with one branch when shifted or drawn in reverse." },
+    rescueTwoBranches: { pass: rescueTwoBranches.phase === "win" && rescueTwoBranches.rescue.caught &&
+        rescueSupports(rescueTwoBranches).length === 2,
+      detail: "A different shape can rest on both branches and win." },
+    rescueFallsWithoutSupport: { pass: rescueUnsupported.phase === "loss" && rescueUnsupported.failure === "water" &&
+        rescueUnsupported.ticks > 0 && rescueSupports(rescueUnsupported).length === 0,
+      detail: "An unsupported stroke starts the round and falls into the river without snapping." },
+    rescueLowCradle: { pass: rescueDeep.phase === "loss" && rescueDeep.rescue.caught && rescueDeep.failure === "water",
+      detail: "A branch can hold the stroke while the cradle dips too close to the water." },
+    rescueExposedToBees: { pass: rescueExposed.phase === "loss" && rescueExposed.rescue.caught && rescueExposed.failure === "bees",
+      detail: "A straight stroke can hold the pup but still leave an opening for bees." },
+    rescuePegAndCliffWins: { pass: newRescueWins.flat().every(round => round.phase === "win" && round.rescue.caught &&
+        round.bounces > 0 && rescueSupports(round).length > 0),
+      detail: "The peg and cliff routes survive even with offset strokes drawn in the other direction." },
+    rescueSpikesMatchTeeth: { pass: spikeFall.phase === "loss" && spikeFall.failure === "spikes" && actualSpikeContact,
+      detail: "A pup can touch a spike tip, while the air at the same height between tips stays clear." },
+    rescueRisingLava: { pass: risingLava.phase === "loss" && risingLava.failure === "lava" && risingLava.rescue.caught &&
+        risingLava.elapsed > 5 && rescueSupports(risingLava).length > 0 && rescueHazardY(risingLava) < lavaRescue.rescue.hazard.y,
+      detail: "Rising lava eventually reaches a caught pup even while the ink remains supported." },
+    rescueLonePeg: { pass: lonePeg.boxes.length === 1 && lonePegWins.every(round => round.phase === "win" &&
+        round.rescue.caught && round.bounces > 0 && rescueSupports(round).join() === lonePeg.boxes[0].id),
+      detail: "Different hooks can catch and guard the pup on the only peg, even when drawn in reverse." },
+    rescueLonePegSlips: { pass: slippedOffPeg.phase === "loss" && slippedOffPeg.failure === "water" &&
+        slippedOffPeg.rescue.caught && Math.abs(slippedOffPeg.inkBody.angle) > .5 && rescueSupports(slippedOffPeg).length === 0,
+      detail: "An off-center stroke catches the pup briefly but rotates and slips off the peg." },
+    campaignStructure: { pass: CAMPAIGN_CHAPTERS.map(chapter => chapter.id).join() === "grass,jungle,lake,cliff,snow,volcano" &&
+        CAMPAIGN_CHAPTERS.every(chapter => chapter.levels.length === 5 && chapter.levels.every((level, index) => level.challenge === (index === 4))) &&
+        new Set(CAMPAIGN_LEVELS.map(level => level.id)).size === 30 && [...LEVELS, ...RESCUE_LEVELS].every(level => reusedIds.has(level.id)),
+      detail: "Six chapters reuse all 24 saved level IDs and each adds a new final challenge." },
+    campaignReferences: { pass: campaignWins.length === 30 && campaignWins.every(round => round.phase === "win" && round.bounces > 0),
+      detail: campaignWins.filter(round => round.phase !== "win").map(round => round.level.id + ": " + round.phase).join(", ") || "All 30 reference strokes win." },
+    campaignChallengeAlternates: { pass: challengeAlternateWins.length === 6 && challengeAlternateWins.every(round => round.phase === "win"),
+      detail: challengeAlternateWins.filter(round => round.phase !== "win").map(round => round.level.id).join(", ") || "Each chapter challenge has a second winning shape." },
+    jungleChallengeTolerance: { pass: shiftedJungleWins.every(round => round.phase === "win") && forestMiss.phase === "loss" && forestMiss.failure === "spikes",
+      detail: "Both shifted shapes win, while a stroke that cannot find a support falls into the spikes." },
+    patrolIntoDrop: { pass: sawPatrol && fellFromMarker && Math.abs(dropTime - forestDrop.rescue.releaseAt) <= RULES.step &&
+        dropWin.phase === "win" && dropWin.rescue.caught,
+      detail: "The bear walks at a fixed height, releases at the marked edge, and can be caught by ink." },
   };
 }

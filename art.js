@@ -90,7 +90,7 @@ function makePainter(canvas) {
   function habitat(round) {
     const { level } = round;
     const palette = PALETTES[level.palette];
-    const random = randomizer(31 + LEVELS.indexOf(level) * 913);
+    const random = randomizer(31 + (level.chapterLevel ?? LEVELS.indexOf(level)) * 913);
     const sky = bg.createLinearGradient(0, 0, 0, BOARD.ground);
     sky.addColorStop(0, palette.sky);
     sky.addColorStop(.77, palette.horizon);
@@ -107,6 +107,7 @@ function makePainter(canvas) {
     path(bg, "M321 116q7-6 13 1q7-7 13-2m14 12q5-5 10 0q5-5 9-2", null, "#526d625b", 1.5);
     path(bg, "M0 275C104 205 178 268 275 255S418 189 531 233S692 218 769 213Q832 209 900 256V478H0Z", palette.far);
     path(bg, "M0 314Q130 286 220 324T435 307Q538 265 660 306T900 284V478H0Z", palette.near);
+    chapterLandmarks(level.chapterId, palette);
     tree(35, 361, .99, palette.near);
     tree(76, 342, .63, palette.near);
     tree(875, 376, 1.54, palette.near);
@@ -118,7 +119,7 @@ function makePainter(canvas) {
       const x = random() * 900;
       const y = 379 + random() * 96;
       const s = .35 + (y - 379) / 175;
-      if (i % 5 === 0) {
+      if (i % 5 === 0 && level.chapterId !== "snow" && level.chapterId !== "volcano") {
         flower(x, y, s, i % 3 ? "#fff2cc" : "#f2b074");
       } else {
         path(bg, "M" + x + " " + y + "q-" + (4 * s) + " -" + (5 * s) + " -" + (8 * s) + " -" + (5 * s) +
@@ -143,14 +144,14 @@ function makePainter(canvas) {
         oval(bg, x, y, 1.7 + random() * 2.2, 1, "#f6df9b79", -.24);
       }
     }
-    for (const box of round.platforms) {
-      if (!box.travel) earth(bg, box, palette);
-    }
+    rescueScenery(round, palette);
     for (let i = 0; i < 23; i++) {
       const x = i * 41 + random() * 30;
       if (x > 260 && x < 640) continue;
       if (level.pits?.some(pit => x > pit.x - 8 && x < pit.x + pit.width + 8)) continue;
-      flower(x, 482, .54 + random() * .45, i % 3 === 0 ? "#d08259" : "#fff6d7");
+      if (level.chapterId !== "snow" && level.chapterId !== "volcano") {
+        flower(x, 482, .54 + random() * .45, i % 3 === 0 ? "#d08259" : "#fff6d7");
+      }
     }
     for (let i = 0; i < 19500; i++) {
       const x = random() * 900;
@@ -158,6 +159,186 @@ function makePainter(canvas) {
       bg.fillStyle = i % 3 ? "#fff9e91f" : "#4b453119";
       bg.fillRect(x, y, 1 + random() * 1.3, 1 + random() * .7);
     }
+  }
+
+  function chapterLandmarks(chapterId, palette) {
+    switch (chapterId) {
+      case "jungle":
+        path(bg, "M0 0H900V43Q852 77 803 48Q762 97 708 54Q652 95 585 53Q530 82 470 39Q404 78 334 42Q279 93 209 56Q152 100 101 55Q52 80 0 56Z", "#73966c6b");
+        path(bg, "M0 0H278Q229 45 171 31Q129 62 78 35Q39 61 0 43ZM655 0H900V39Q853 70 803 38Q743 68 703 34Q677 36 655 0Z", "#52785877");
+        path(bg, "M54 27Q80 150 12 310H0Q49 181 23 23M850 28Q823 176 895 313H900Q862 172 881 21", "#76966d65");
+        break;
+      case "lake":
+        path(bg, "M0 306Q150 282 320 306T626 295T900 292V371Q762 353 644 361T322 353T0 373Z", "#afcfc8");
+        path(bg, "M24 326Q91 318 141 326M237 333Q318 324 378 331M486 314Q535 307 576 314M690 336Q764 326 815 333", null, "#dcece2", 2);
+        break;
+      case "cliff":
+        path(bg, "M0 175L107 142L175 184L189 282L231 312L231 383H0ZM699 382V296L744 250L754 173L849 147L900 160V382Z", "#a697847f");
+        path(bg, "M0 216L97 201L173 226M18 262L118 246L184 265M758 211L833 190L900 195M727 277L818 232L900 247", null, "#d6c7ae", 3);
+        break;
+      case "snow":
+        path(bg, "M0 362L178 134L241 209L349 104L449 232L571 120L714 259L811 174L900 266V386H0Z", "#b8c9d7");
+        path(bg, "M138 186L178 134L224 188L183 171L158 192ZM308 144L349 104L397 166L358 146L344 160L333 145ZM533 157L571 120L629 177L583 163L564 177ZM785 205L811 174L851 222L817 208L805 220Z", "#f4f7ef");
+        for (const [x, y, size] of [[53, 367, 64], [86, 360, 49], [817, 367, 66], [850, 360, 46]]) {
+          path(bg, `M${x} ${y - size}l${size * .34} ${size * .68}h${-size * .18}l${size * .29} ${size * .32}h${-size * .9}l${size * .29} ${-size * .32}h${-size * .18}Z`, palette.near);
+        }
+        break;
+      case "volcano":
+        path(bg, "M0 381L159 239L237 151L296 160L411 282L497 345V391Z", "#b38578");
+        path(bg, "M219 170L237 151L296 160L321 185L277 177L253 167Z", "#95695e");
+        path(bg, "M252 139Q225 123 247 104Q268 86 254 67Q286 83 277 105Q274 122 295 136Z", "#9b80716b");
+        path(bg, "M673 367L755 284L829 253L900 285V385Z", "#bf8d78");
+        break;
+    }
+  }
+
+  function riverWater({ left, right, y }) {
+    const water = bg.createLinearGradient(0, y, 0, BOARD.height);
+    water.addColorStop(0, "#a6d9c3");
+    water.addColorStop(1, "#5da7a8");
+    bg.fillStyle = water;
+    bg.fillRect(left, y, right - left, BOARD.height - y);
+    path(bg, `M${left} ${y}H${right}`, null, "#eff0c7", 3);
+    const random = randomizer(86);
+    for (let index = 0; index < 25; index++) {
+      const x = left + 12 + random() * (right - left - 85);
+      const waveY = y + 11 + random() * 95;
+      const width = 17 + random() * 45;
+      path(bg, `M${x} ${waveY}q${width / 2} -4 ${width} 0m-5 6h-11`, null, "#f0f4cb90", 1.7);
+    }
+  }
+
+  function drawPlank(target, branch) {
+    const { x, y, w, h } = branch;
+    const rightBranch = x > BOARD.width / 2 && branch.kind !== "float";
+    target.save();
+    target.translate(rightBranch ? x + w : x, y);
+    if (rightBranch) target.scale(-1, 1);
+    path(target, `M0 0H${w - 6}Q${w + 1} 3 ${w} ${h / 2}Q${w} ${h} ${w - 6} ${h}H0Z`, "#a47b54", "#624d3d", 3);
+    path(target, `M4 4H${w - 11}M4 ${h - 7}Q${w / 2} ${h - 10} ${w - 16} ${h - 7}`, null, "#e4bd87", 1.8);
+    oval(target, w - 4.5, h / 2, 3.5, h / 2 - 3, "#d6ad77");
+    target.restore();
+  }
+
+  function drawRock(target, rock) {
+    const { x, y, w, h } = rock;
+    const isLedge = rock.kind === "ledge";
+    target.save();
+    target.translate(x, y);
+    path(target, `M0 ${h}V7L8 0H${w - 7}l7 7v${h - 14}l-7 7Z`, isLedge ? "#a0826b" : "#8e7567", "#604b44", 3);
+    path(target, `M10 4H${w - 10}L${w - 2} 9H3Z`, "#d3ab86");
+    path(target, `M3 ${Math.round(h * .44)}h${Math.round(w * .31)}l${Math.round(w * .12)} 7h${Math.round(w * .43)}`, null, "#684f465e", 2);
+    if (!isLedge) {
+      path(target, `M${w * .64} ${h * .08}L${w * .5} ${h * .24}L${w * .62} ${h * .4}L${w * .54} ${h * .52}` +
+        `M${w * .25} ${h * .53}L${w * .33} ${h * .66}L${w * .24} ${h * .79}L${w * .29} ${h * .93}`, null, "#6e564c", 3);
+      path(target, `M${w * .08} ${h * .79}L${w * .34} ${h * .72}L${w * .58} ${h * .77}L${w * .82} ${h * .73}`, null, "#b49a7f", 2);
+    }
+    target.restore();
+  }
+
+  function rescueScenery(round, palette) {
+    const { level } = round;
+    const hazard = level.rescue?.hazard;
+    if (hazard?.kind === "water") riverWater(hazard);
+    else if (level.chapterId === "lake") {
+      for (const pit of level.pits ?? []) riverWater({ left: pit.x, right: pit.x + pit.width, y: pit.bottom - 20 });
+    }
+    if (hazard?.kind === "spikes") {
+      const { left, right, y, height } = hazard;
+      bg.fillStyle = "#676551";
+      bg.fillRect(left, y + height, right - left, BOARD.height - y - height);
+      for (const [a, tip, b] of round.rescue.teeth) {
+        path(bg, `M${a.x} ${a.y}L${tip.x} ${tip.y}L${b.x} ${b.y}Z`, "#929785", "#414b45", 2);
+        path(bg, `M${tip.x} ${tip.y + 7}L${tip.x - 4} ${a.y - 7}`, null, "#e9ecce", 2);
+      }
+      path(bg, `M${left} ${y + height}H${right}`, null, "#444c47", 4);
+    }
+    const platforms = round.platforms.filter(box => !box.travel);
+    for (const box of platforms.filter(box => !box.kind)) earth(bg, box, palette);
+    for (const [index, box] of platforms.filter(box => box.kind === "trunk").entries()) {
+      const { x, y, w, h } = box;
+      bg.save();
+      bg.translate(x, y);
+      if (index) {
+        bg.translate(w, 0);
+        bg.scale(-1, 1);
+      }
+      path(bg, `M0 ${h}V13Q7 0 24 0H${w - 12}L${w} 14V${h}Z`, "#a47b54", "#624d3d", 3);
+      path(bg, `M12 ${h}Q5 235 17 155T18 8M37 ${h}Q27 277 39 185T35 20M61 ${h}Q70 281 59 213T64 51`, null, "#795b44", 2.4);
+      path(bg, "M45 175Q56 149 74 145M11 109q13-14 23-13M28 42Q9 28-28 21", null, "#674d39", 4);
+      oval(bg, -17, 6, 32, 10, "#779377", .34);
+      oval(bg, 14, 6, 25, 10, "#8ba886", -.43);
+      oval(bg, 56, 5, 25, 9, "#9fb593", -.28);
+      bg.restore();
+    }
+    for (const branch of platforms.filter(box => ["branch", "peg", "float"].includes(box.kind))) drawPlank(bg, branch);
+    for (const peg of platforms.filter(box => box.kind === "pin")) {
+      const { x, y, w, h } = peg;
+      const center = x + w / 2;
+      path(bg, `M${center} -3Q${center - 7} ${y * .45} ${center} ${y + 10}`, null, "#846c54", 3);
+      path(bg, `M${x + 5} ${y}H${x + w - 5}Q${x + w} ${y} ${x + w} ${y + h / 2}Q${x + w} ${y + h} ${x + w - 5} ${y + h}H${x + 5}Q${x} ${y + h} ${x} ${y + h / 2}Q${x} ${y} ${x + 5} ${y}Z`, "#af875e", "#624d3d", 3);
+      oval(bg, x + w - 7, y + h / 2, 4.8, h / 2 - 3, "#d6ad77");
+      path(bg, `M${x + 6} ${y + 5}h${w - 19}m-${w - 20} ${h - 12}q15-4 ${w - 22} -1`, null, "#f2cf92", 2);
+    }
+    for (const rock of platforms.filter(box => box.kind === "cliff" || box.kind === "ledge")) drawRock(bg, rock);
+  }
+
+  function rescueLava(round, age) {
+    const { left, right } = round.level.rescue.hazard;
+    const y = rescueHazardY(round);
+    const molten = ctx.createLinearGradient(0, y, 0, BOARD.height);
+    molten.addColorStop(0, "#ffb740");
+    molten.addColorStop(.32, "#e9743c");
+    molten.addColorStop(1, "#ac4238");
+    ctx.fillStyle = molten;
+    ctx.fillRect(left, y, right - left, BOARD.height - y);
+    path(ctx, `M${left} ${y + 1}H${right}`, null, "#ffe188", 2);
+    const time = motion.matches ? 0 : age;
+    const span = right - left - 68;
+    for (let index = 0; index < 14; index++) {
+      const x = left + 11 + (index * 83 + time * (7 + index % 3)) % span;
+      const rippleY = y + 8 + (index * 17) % (BOARD.height - y - 12);
+      path(ctx, `M${x} ${rippleY}q17-5 40-1`, null, index % 3 ? "#ffce637f" : "#fff0a35e", 2);
+    }
+  }
+
+  function rescueBranch(round) {
+    const { x: originX, y, patrol } = round.level.dogs[0];
+    const { perch, releaseAt } = round.level.rescue;
+    const x = releaseAt ? patrol.to : originX;
+    const elapsed = Math.max(0, round.elapsed - (releaseAt ?? 0));
+    const ready = !round.rescue.released;
+    const { x: rootX, material, sling } = perch;
+    const isStone = material === "stone";
+    const outline = isStone ? "#64534e" : "#684f3d";
+    const fill = isStone ? "#a8907c" : "#b08659";
+    const grain = isStone ? "#cdb59c" : "#edd09b";
+    if (ready && rootX !== undefined) {
+      const edge = rootX < x ? -1 : 1;
+      path(ctx, `M${x + edge * 40} ${y + 35}Q${x + edge * 105} ${y + 38} ${rootX} ${y + 58}v12Q${x + edge * 108} ${y + 46} ${x + edge * 43} ${y + 45}Z`, fill, outline, 2.7);
+    }
+    if (ready && sling) {
+      const peg = round.platforms[0];
+      const pegX = peg.x + peg.w / 2;
+      path(ctx, `M${x - 43} ${y + 40}L${pegX} ${peg.y + peg.h}L${x + 43} ${y + 40}`, null, "#8e775a9c", 2.3);
+    }
+    if (!ready && elapsed >= 0.7) return;
+    ctx.save();
+    ctx.translate(x, y + 39);
+    ctx.globalAlpha = ready ? 1 : 1 - elapsed / 0.7;
+    for (const side of releaseAt ? [Math.sign(rootX - x)] : [-1, 1]) {
+      ctx.save();
+      if (!ready) {
+        ctx.translate(side * elapsed * 25, elapsed * elapsed * 410);
+        ctx.rotate(side * elapsed);
+      }
+      ctx.scale(side, 1);
+      path(ctx, "M-3 -4Q17 -8 46 -4L51 4Q24 9 3 6L-3 2Z", fill, outline, 3);
+      path(ctx, "M10 2Q22 -2 37 0", null, grain, 1.5);
+      ctx.restore();
+    }
+    if (ready) path(ctx, "M3 -5l-5 5 6 2-4 5", null, "#604938", 2.2);
+    ctx.restore();
   }
 
   function drawHive(hive, time, active) {
@@ -181,54 +362,148 @@ function makePainter(canvas) {
     ctx.restore();
   }
 
-  function puppy(dog, time, phase, injured) {
-    const brown = dog.brown;
-    const fur = brown ? "#d89062" : "#edbc6d";
-    const ear = brown ? "#884e47" : "#a86646";
-    const cream = brown ? "#f6dbc2" : "#fff0cd";
-    const outline = "#5e4537";
+  function puffedForehead(age) {
+    const [left, middle, right] = [0, .08, .16].map(delay => {
+      const progress = motion.matches ? 1 : clamp((age - delay) / .3, 0, 1);
+      return progress * (2 - progress);
+    });
+    return `Q-19 -34 -18 -34 A6.5 ${6.5 * left} 0 0 1 -5 -34` +
+      `Q-4 -34 -4 -35 A7 ${7 * middle} 0 0 1 10 -35` +
+      `Q11 -34 11 -33 A6 ${6 * right} 0 0 1 23 -33 Q29 -27 32 -18`;
+  }
+
+  function drawStingStars(age) {
+    const progress = motion.matches ? 1 : clamp(age / .28, 0, 1);
+    if (!progress) return;
+    for (const [x, y, size, tilt] of [[-43, -47, 10, -.22], [39, -56, 8, .25]]) {
+      ctx.save();
+      ctx.translate(x + Math.sign(x) * 3 * progress, y - 3 * progress);
+      ctx.rotate(tilt);
+      ctx.scale(size * progress, size * progress);
+      path(ctx, "M0 -1Q.22 -.2 1 0Q.22 .2 0 1Q-.22 .2 -1 0Q-.22 -.2 0 -1Z", "#ffdf8d", "#a67b4f", .14);
+      ctx.restore();
+    }
+  }
+
+  const bearCoats = [
+    { fur: "#bc8559", shade: "#a46e4b", light: "#d09a68", cream: "#f2d4a6", blush: "#efb5ab" },
+    { fur: "#a06b54", shade: "#865843", light: "#bd8766", cream: "#efc49b", blush: "#dda396" },
+  ];
+  const bearOutline = "#563a2c";
+
+  function drawHoneyPot(x = 0, y = 0) {
     ctx.save();
-    ctx.translate(dog.x, dog.y);
-    oval(ctx, 0, 32, 40, 6.5, "#4c4e343d");
-    const wag = motion.matches ? 0 : Math.sin(time * (phase === "win" ? 16 : 6)) * 4;
-    ctx.save();
-    ctx.translate(18, 24);
-    ctx.rotate(wag / 19);
-    path(ctx, "M8-4Q16 2 22-9Q24-17 20-19Q36-24 38-12Q41 2 29 11Q18 19 8 11Z", fur, outline, 3.2);
-    path(ctx, "M25-20Q34-22 37-14Q29-9 22-12Q23-15 20-19Z", cream);
+    ctx.translate(x, y);
+    path(ctx, "M-12 20Q-15 27-10 32Q0 36 10 32Q15 27 12 20Z", "#6d9088", bearOutline, 2.2);
+    path(ctx, "M-13 19Q-13 16 0 15Q13 16 13 19Q12 22 0 22Q-12 22-13 19Z", "#f6b846", bearOutline, 1.8);
+    path(ctx, "M5 20q2-2 5-1q1 2 0 5q1 4-2 4q-2-1-1-3q1-2-2-5Z", "#e8a537");
+    path(ctx, "M-10 27q4 2 8 2", null, "#b1c8a6", 1.6);
     ctx.restore();
-    path(ctx, "M-22 32Q-32 27-26 14Q-21 6 0 7Q20 4 29 17Q35 30 24 33H-22Z", fur, outline, 3);
-    path(ctx, "M-18 31Q-20 18-13 14L11 14Q15 20 17 31Z", cream);
-    path(ctx, "M-23 34q-6-5 1-9q7-3 11 4m23 2q-1-6 6-6q8 0 8 6q-3 4-11 3", cream, outline, 2.5);
-    path(ctx, "M-22 12Q-9 23 19 12L8 31Q3 34-1 29Z", brown ? "#6a9281" : "#bc6551", outline, 2);
-    oval(ctx, 2, 23, 3.3, 3.3, "#f9d48d");
-    const breathing = motion.matches ? 0 : Math.sin(time * 3.15 + dog.x) * 1.15;
+  }
+
+  function honeyBear(bear, time, phase, injured, stingAge) {
+    const stung = stingAge !== null;
+    const { fur, shade, light, cream, blush } = bearCoats[bear.brown ? 1 : 0];
+    const outline = bearOutline;
+    ctx.save();
+    ctx.translate(bear.x, bear.y);
+    oval(ctx, 0, 33, 34, 5.5, "#4c4e343d");
+    path(ctx, "M-25 33Q-31 26-26 15Q-23 5-12 5H13Q24 6 27 16Q32 30 23 33Z", fur, outline, 3);
+    oval(ctx, 0, 23, 16, 12, cream);
+    path(ctx, "M-29 32q1-10 11-8q8 1 7 10h-14q-4 0-4-2m40 2q-1-9 7-10q10-2 11 8q0 2-4 2Z", shade, outline, 2.5);
+    path(ctx, "M-22 32v-2m5 2v-2m34 2v-2m5 2v-2", null, "#d6ae876f", 1.5);
+
+    const breathing = motion.matches ? 0 : Math.sin(time * 3.15 + bear.x) * .85;
+    ctx.save();
     ctx.translate(0, breathing);
-    path(ctx, "M-29-8Q-34-28-23-38Q-13-44-5-34Q3-37 13-34Q31-41 35-26Q39-15 25-8Z", fur, outline, 3);
-    path(ctx, "M-23-34Q-35-31-39-15Q-44 4-32 4Q-23 1-21-12Q-17-21-12-27Z", ear, outline, 3);
-    path(ctx, "M23-34Q34-33 40-20Q47-6 37 1Q29 4 25-9Q21-21 15-27Z", ear, outline, 3);
-    path(ctx, "M-26-11Q-28-26-14-32Q1-39 17-31Q29-25 30-11Q37 3 25 11Q15 18 0 17Q-19 18-28 11Q-40 4-26-11Z", fur, outline, 3.1);
-    path(ctx, "M-31 1Q-27-9-18-8Q-11-7-8-2Q-6-9 0-9Q6-9 9-2Q12-8 20-8Q29-7 32 2Q30 15 10 16Q-5 19-22 14Q-31 11-31 1Z", cream);
-    oval(ctx, -20, 0, 6.2, 3.5, "#db826f82", -.12);
-    oval(ctx, 21, 0, 6.2, 3.5, "#db826f82", .12);
-    const blinking = !motion.matches && (time + dog.x * .015) % 4.2 < .13;
+    for (const x of [-25, 25]) {
+      oval(ctx, x, -34, 12.6, 13.5, outline);
+      oval(ctx, x, -34, 10, 11, shade);
+      oval(ctx, x, -34, 6.1, 6.6, "#d99981");
+    }
+    const face = ctx.createLinearGradient(0, stung ? -42 : -37, 0, 19);
+    if (stung) {
+      face.addColorStop(0, blush);
+      face.addColorStop(.08, blush);
+      face.addColorStop(.22, light);
+    } else {
+      face.addColorStop(0, light);
+    }
+    face.addColorStop(1, fur);
+    const forehead = stung ? puffedForehead(stingAge) : "Q-16-35-7-36L-5-39Q-2-41 1-36L6-39L10-35Q27-33 32-18";
+    path(ctx, `M-33-10Q-32-25-19-32${forehead}Q40-2 28 9Q19 18 0 18Q-21 18-30 8Q-37 2-33-10Z`, face, outline, 3.1);
+    if (stung) drawStingStars(stingAge);
+    oval(ctx, -21, 0, 5.5, 3.2, "#db8d7580", -.18);
+    oval(ctx, 21, 0, 5.5, 3.2, "#db8d7580", .18);
+    oval(ctx, 0, 5, 16, 11, cream);
+    const blinking = !motion.matches && (time + bear.x * .015) % 4.2 < .13;
     if (injured) {
-      path(ctx, "M-19-17l7 3l-6 3m38-6l-7 3l6 3", null, outline, 2.5);
+      path(ctx, "M-20-16l7 3l-7 3m40-6l-7 3l7 3", null, outline, 2.5);
     } else if (phase === "win" || blinking) {
-      path(ctx, "M-20-12q4-5 8 0m25 0q4-5 8 0", null, outline, 2.7);
+      path(ctx, "M-19-12q4-5 8 0m22 0q4-5 8 0", null, outline, 2.7);
     } else {
-      oval(ctx, -15.5, -13.5, 2.8, 4.1, outline);
-      oval(ctx, 16, -13.5, 2.8, 4.1, outline);
-      oval(ctx, -15, -15, .85, 1, "#fff5dc");
-      oval(ctx, 16.5, -15, .85, 1, "#fff5dc");
+      oval(ctx, -15, -12.5, 2.8, 4.1, outline);
+      oval(ctx, 15, -12.5, 2.8, 4.1, outline);
+      oval(ctx, -14.4, -13.8, .85, 1, "#fff5dc");
+      oval(ctx, 15.6, -13.8, .85, 1, "#fff5dc");
     }
-    path(ctx, "M-6-5Q0-9 6-5Q9-2 2 2Q0 3-2 2Q-8-1-6-5Z", "#48362e");
+    path(ctx, "M-7-1Q-6-6 0-6Q7-6 7-1Q6 2 1 4H-1Q-6 2-7-1Z", "#473026");
     if (injured) {
-      path(ctx, "M-7 10Q0 3 7 10", null, outline, 1.75);
+      path(ctx, "M-6 11Q0 5 6 11", null, outline, 1.9);
     } else {
-      path(ctx, "M0 2v2q-4 6-9 1m9-1q4 6 9 1", null, outline, 1.65);
-      path(ctx, "M-4 8q4 2 8 0q-1 7-4 7q-3 0-4-7Z", "#da806f", outline, 1.1);
+      path(ctx, "M0 3v3q-4 6-9 2m9-2q4 6 9 2", null, outline, 1.8);
     }
+    path(ctx, "M8 8q4-3 7 0q0 3-2 4q0 6-3 6q-3 0-3-3l1-3q-2-2 0-4Z", "#e8a537");
+    path(ctx, "M9 8q1-1 3-1", null, "#fff1a5", 1.3);
+    ctx.restore();
+
+    drawHoneyPot();
+    path(ctx, "M-17 19q5-2 7 3q2 5-3 6q-5 0-6-4q-1-3 2-5Zm34 0q-5-2-7 3q-2 5 3 6q5 0 6-4q1-3-2-5Z", light, outline, 2);
+    ctx.restore();
+  }
+
+  function honeyBearProfile(bear, facing, stride, falling) {
+    const { fur, shade, light, cream } = bearCoats[bear.brown ? 1 : 0];
+    const swing = stride === null ? 0 : Math.sin(stride) * 7;
+    const lift = stride === null ? 0 : Math.cos(stride) * 4.5;
+    ctx.save();
+    ctx.translate(bear.x, bear.y);
+    ctx.scale(facing, 1);
+    if (!falling) oval(ctx, -3, 34, 28, 4, "#4c4e343d");
+    if (falling && !motion.matches) ctx.rotate(.13);
+
+    for (const [hip, alternate, color] of [[3, -1, shade], [-15, 1, fur]]) {
+      const x = hip + alternate * swing + (falling ? 5 : 0);
+      const y = 31 - Math.max(0, alternate * lift) - (falling ? 5 : 0);
+      path(ctx, `M${hip} 17Q${hip - 4} 26 ${x - 4} ${y - 1}Q${x - 2} ${y + 3} ${x + 7} ${y + 2}` +
+        `Q${x + 12} ${y + 1} ${x + 8} ${y - 4}L${hip + 7} 17Z`, color, bearOutline, 2.5);
+    }
+
+    const bob = stride === null ? 0 : -Math.abs(Math.sin(stride)) * 1.8;
+    ctx.translate(0, bob);
+    oval(ctx, -25, 17, 5, 5.6, shade);
+    path(ctx, "M-25 21Q-29 3-14 1Q-3-5 10 4Q20 12 17 23Q10 30-7 28Q-19 29-25 21Z", fur, bearOutline, 3);
+    oval(ctx, 5, 18, 10, 8.5, cream, .25);
+    drawHoneyPot(21, -2);
+    path(ctx, "M-11 13Q-6 9 4 16Q13 21 19 18Q24 17 26 22Q25 27 17 27Q1 27-10 22Q-16 18-11 13Z", light, bearOutline, 2.4);
+
+    oval(ctx, 6, -34, 10, 11.5, bearOutline);
+    oval(ctx, 6, -34, 7.4, 8.7, shade);
+    oval(ctx, 6, -34, 4.5, 5.4, "#d99981");
+    oval(ctx, -16, -34, 11.5, 12.5, bearOutline);
+    oval(ctx, -16, -34, 8.8, 10, fur);
+    oval(ctx, -16, -34, 5.4, 6.4, "#d99981");
+    const face = ctx.createLinearGradient(0, -35, 0, 19);
+    face.addColorStop(0, light);
+    face.addColorStop(1, fur);
+    path(ctx, "M-28-12Q-28-28-14-32Q-5-38 6-33Q18-30 23-19Q25-11 34-7Q43-1 35 8Q27 16 7 18Q-15 19-24 9Q-32 3-28-12Z", face, bearOutline, 3.1);
+    path(ctx, "M10 1Q17-7 30-6Q41-4 34 6Q28 13 15 13Q8 10 10 1Z", cream);
+    oval(ctx, 12, -14, 3.3, 4.2, bearOutline);
+    oval(ctx, 13, -15.1, .8, .95, "#fff5dc");
+    oval(ctx, 35, -3, 5.1, 3.9, "#473026", .2);
+    oval(ctx, 6, 0, 5.2, 3, "#db8d7580");
+    path(ctx, "M31 1Q28 10 22 7", null, bearOutline, 1.65);
+    path(ctx, "M23 8Q29 4 30 8Q28 10 27 13Q26 17 23 14Q24 10 23 8Z", "#e8a537");
     ctx.restore();
   }
 
@@ -281,19 +556,20 @@ function makePainter(canvas) {
     ctx.lineWidth = 2.8;
     ctx.strokeStyle = "#3e6956aa";
     ctx.setLineDash([5, 7]);
-    for (const dog of round.level.dogs) {
-      if (!dog.patrol) continue;
-      const start = Math.min(dog.x, dog.patrol.to);
-      const end = Math.max(dog.x, dog.patrol.to);
+    for (const bear of round.level.dogs) {
+      if (!bear.patrol) continue;
+      const start = Math.min(bear.x, bear.patrol.to);
+      const end = Math.max(bear.x, bear.patrol.to);
       const radius = RULES.puppyRadius + RULES.lineRadius;
       ctx.beginPath();
-      ctx.roundRect(start - radius, dog.y - radius, end - start + 2 * radius, 2 * radius, radius);
+      ctx.roundRect(start - radius, bear.y - radius, end - start + 2 * radius, 2 * radius, radius);
       ctx.stroke();
       for (let x = start; x <= end; x += 23) {
-        const y = dog.y + 24 + (Math.round((x - start) / 23) % 2 ? -5 : 0);
+        const y = bear.y + 24 + (Math.round((x - start) / 23) % 2 ? -5 : 0);
         oval(ctx, x, y, 4.5, 3.3, "#43654c9e", -.24);
-        oval(ctx, x + 4.2, y - 4.4, 1.7, 1.7, "#43654c9e");
-        oval(ctx, x + 5.9, y - .9, 1.6, 1.6, "#43654c9e");
+        for (const [dx, dy] of [[.5, -5], [3.2, -5.3], [5, -4], [6.3, -1.6], [6, 1]]) {
+          oval(ctx, x + dx, y + dy, 1.05, 1.2, "#43654c9e");
+        }
       }
     }
     ctx.strokeStyle = "#596351b8";
@@ -307,10 +583,28 @@ function makePainter(canvas) {
     ctx.restore();
   }
 
+  function dropGuide(round) {
+    if (!round.level.rescue?.releaseAt || round.rescue.released) return;
+    const { y, patrol } = round.level.dogs[0];
+    const x = patrol.to;
+    inkPath([{ x, y: y + 42 }, { x, y: y + 91 }], "#744d39b0", 3, true);
+    path(ctx, `M${x - 6} ${y + 84}l6 9 6-9`, null, "#744d39b0", 3);
+    oval(ctx, x, y + 36, 8, 5, "#ffda80");
+    oval(ctx, x, y + 36, 3.5, 2.5, "#806047");
+  }
+
   function movingPlatforms(round) {
     const palette = PALETTES[round.level.palette];
     for (const box of round.platforms) {
       if (!box.travel) continue;
+      if (box.kind === "float") {
+        drawPlank(ctx, box);
+        continue;
+      }
+      if (box.kind === "ledge") {
+        drawRock(ctx, box);
+        continue;
+      }
       ctx.save();
       ctx.translate(box.x, box.y);
       ctx.fillStyle = palette.soil;
@@ -335,6 +629,14 @@ function makePainter(canvas) {
 
     const time = view.age;
     const moving = round.phase === "playing";
+    if (round.level.chapterId === "snow") {
+      const drift = motion.matches ? 0 : time;
+      for (let index = 0; index < 18; index++) {
+        const x = (index * 127 + Math.sin(drift + index) * 5 + BOARD.width) % BOARD.width;
+        const y = (index * 83 + drift * (5 + index % 3)) % 430;
+        oval(ctx, x, y, 1.3 + index % 3 * .4, 1.3 + index % 3 * .4, "#fffef5b3");
+      }
+    }
     if (round.phase === "ready") movementGuides(round);
     movingPlatforms(round);
     const ready = round.phase === "ready";
@@ -347,15 +649,6 @@ function makePainter(canvas) {
       }
       drawHive(hive, time, moving);
       if (!ready) continue;
-      if (round.waves.length > 1) {
-        const wave = round.waves.findIndex(item => item.launches.some(launch => launch.hiveIndex === index));
-        oval(ctx, hive.x + 34, hive.y - 28, 15, 15, hive.heavy ? "#8d4e2d" : "#375549");
-        ctx.fillStyle = "#fff3ca";
-        ctx.font = "bold 18px system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(wave + 1), hive.x + 34, hive.y - 27);
-      }
       const angle = motion.matches ? index * 2 : time * 1.13 + index * 2.4;
       beeSprite({ x: hive.x + Math.cos(angle) * 55, y: hive.y + 8 + Math.sin(angle) * 24, vx: -Math.sin(angle), vy: 0, id: index }, time, .87);
     }
@@ -374,13 +667,40 @@ function makePainter(canvas) {
     if (view.hint && !round.points.length && round.phase === "ready") {
       const points = round.level.guide.map(([x, y]) => ({ x, y }));
       if (view.hint === 2) inkPath(points, "#576b579b", 6, true);
-      for (const p of [points[0], points.at(-1)]) {
+      const marks = round.level.rescue ? [points.reduce((low, point) => point.y > low.y ? point : low)] : [points[0], points.at(-1)];
+      if (round.level.rescue) {
+        for (const support of round.platforms.filter(box => box.id)) {
+          path(ctx, `M${support.x + 8} ${support.y - 3}H${support.x + support.w - 8}`, null, "#ffdc7e", 5);
+        }
+        const hazard = round.level.rescue.hazard;
+        if (hazard.kind === "lava") inkPath([{ x: hazard.left, y: hazard.y - hazard.rise },
+          { x: hazard.right, y: hazard.y - hazard.rise }], "#b65542b0", 3, true);
+        if (!round.level.rescue.releaseAt) {
+          const dog = round.dogs[0];
+          inkPath([{ x: dog.x, y: dog.y + 51 }, { x: marks[0].x, y: marks[0].y - 10 }], "#576b579b", 3, true);
+        }
+      }
+      for (const p of marks) {
         oval(ctx, p.x, p.y, 7.7, 7.7, "#fff3cf");
         oval(ctx, p.x, p.y, 3.2, 3.2, "#687e58");
       }
     }
-    for (const [index, dog] of round.dogs.entries()) {
-      puppy(dog, time, round.phase, round.touched === index);
+    if (round.level.rescue) rescueBranch(round);
+    dropGuide(round);
+    for (const [index, bear] of round.dogs.entries()) {
+      const released = index === 0 && round.rescue?.released;
+      const walking = bear.patrol && !released;
+      const falling = released && !round.rescue.supported && bear.vy > 16;
+      if (moving && (walking || falling || Math.abs(bear.vx) > 10)) {
+        const origin = round.level.dogs[index];
+        const facing = Math.sign(bear.vx) || (origin.patrol?.to < origin.x ? -1 : 1);
+        const stride = walking && !motion.matches ? (bear.x - origin.x) * .27 : null;
+        honeyBearProfile(bear, facing, stride, falling);
+        continue;
+      }
+      const stung = round.touched === index;
+      const injured = stung || Boolean(round.rescue && round.phase === "loss" && round.failure !== "bees");
+      honeyBear(bear, time, round.phase, injured, stung ? view.stingAge ?? 0 : null);
     }
     const ink = round.inkBody?.path ?? round.points;
     inkPath(ink, "#283b32", RULES.lineRadius * 2);
@@ -395,6 +715,7 @@ function makePainter(canvas) {
         oval(ctx, p.x - 1.7, p.y - 1.6, 2.2, 2.2, "#dbe4c9");
       }
     }
+    if (round.level.rescue?.hazard.kind === "lava") rescueLava(round, time);
     for (const bee of round.bees) {
       if (round.elapsed >= bee.delay) beeSprite(bee, time);
     }

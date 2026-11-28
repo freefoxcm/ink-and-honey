@@ -121,7 +121,9 @@ function inkContacts(body, round) {
       const contact = boxContact(x, y, radius + margin, box);
       if (contact) add(contact.nx, contact.ny, contact.depth - margin, box.vx, box.vy);
     }
-    for (const dog of round.dogs) {
+    for (let index = round.rescue?.released ? 1 : 0; index < round.dogs.length; index++) {
+      // The falling bear exchanges impulses with the ink after it moves.
+      const dog = round.dogs[index];
       const dx = x - dog.x;
       const dy = y - dog.y;
       const clearance = RULES.puppyRadius + radius;
@@ -149,6 +151,7 @@ function inkSpeedAt(body, rx, ry, dx, dy) {
 }
 
 function resolveInkTerrain(body, round) {
+  const friction = round.level.rescue?.friction ?? INK_PHYSICS.friction;
   for (let iteration = 0; iteration < 6; iteration++) {
     let deepest = null;
     for (const contact of inkContacts(body, round)) {
@@ -182,7 +185,7 @@ function resolveInkTerrain(body, round) {
 
       const oldTangent = contact.tangentImpulse;
       const tangentSpeed = inkSpeedAt(body, rx, ry, -ny, nx) - contact.tangentSpeed;
-      const limit = INK_PHYSICS.friction * contact.normalImpulse;
+      const limit = friction * contact.normalImpulse;
       contact.tangentImpulse = clamp(oldTangent - tangentSpeed / inverseInkMass(body, rx, ry, -ny, nx), -limit, limit);
       const tangent = contact.tangentImpulse - oldTangent;
       pushInk(body, rx, ry, -tangent * ny, tangent * nx);

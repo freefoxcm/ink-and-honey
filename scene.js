@@ -32,6 +32,20 @@ function updateScene(round) {
   round.dogs.forEach((dog, index) => {
     if (!dog.patrol) return;
     const origin = round.level.dogs[index].x;
+    const releaseAt = index === 0 && round.level.rescue?.releaseAt;
+    if (releaseAt) {
+      if (round.rescue.released) return;
+      if (round.elapsed + 1e-9 >= releaseAt) {
+        dog.x = dog.patrol.to;
+        dog.vx = 0;
+        round.rescue.released = true;
+        return;
+      }
+      const { position, speed } = shuttleMotion(round.elapsed, releaseAt * 2);
+      dog.x = origin + (dog.patrol.to - origin) * position;
+      dog.vx = (dog.patrol.to - origin) * speed;
+      return;
+    }
     const { position, speed } = shuttleMotion(round.elapsed, dog.patrol.period);
     dog.x = origin + (dog.patrol.to - origin) * position;
     dog.vx = (dog.patrol.to - origin) * speed;

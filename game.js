@@ -7,6 +7,9 @@
   const audio = makeAudio();
   const saveKey = "ink-and-honey-progress-v2";
   const oldSaveKey = "ink-and-honey-progress-v1";
+  const stingMessage = "哎呀，小熊被蛰到了！";
+  const stingRevealSeconds = 1.05;
+  const previewSaveKey = "ink-and-honey-jungle-preview-v1";
   const lockIcon = '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="5" width="7" height="5.5" rx="1"/><path d="M4 5V3.6a2 2 0 0 1 4 0V5"/></svg>';
   const backgroundControls = [document.querySelector(".masthead"), document.querySelector(".intro"), document.querySelector(".stage-bar"), document.querySelector(".side"), field];
   const ui = {
@@ -17,9 +20,14 @@
     groupLock: byId("group-lock"), wind: byId("wind-indicator"), windArrow: byId("wind-arrow"),
     waves: byId("waves"),
   };
-  const best = readProgress();
-  let levelIndex = Math.max(0, best.indexOf(0));
-  let browseGroup = LEVELS[levelIndex].groupIndex;
+  const adventure = { id: "adventure", key: saveKey, levels: CAMPAIGN_LEVELS, chapters: CAMPAIGN_CHAPTERS, best: readProgress(saveKey) };
+  const preview = {
+    id: "preview", key: previewSaveKey, levels: JUNGLE_PREVIEW,
+    chapters: CAMPAIGN_CHAPTERS.filter(chapter => chapter.id === "jungle"), best: readProgress(previewSaveKey),
+  };
+  let mode = adventure;
+  let levelIndex;
+  let browseChapter;
   let nextLevel = -1;
   let round;
   let pointer = null;
@@ -33,103 +41,114 @@
   let lag = 0;
   let time = 0;
   let lastFrame = performance.now();
-  const view = { age: 0, hint: 0, drawing: false, cursor: null };
-  const groupButtons = LEVEL_GROUPS.map((group, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "group-button";
-    button.textContent = group.name;
-    button.addEventListener("click", () => {
-      browseGroup = index;
-      updateLevels();
-    });
-    ui.groups.append(button);
-    return button;
-  });
-  const nodes = LEVELS.map((level, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = level.challenge ? "round challenge" : "round";
-    button.addEventListener("click", () => selectLevel(index));
-    ui.rounds.append(button);
-    return button;
-  });
+  let groupButtons = [];
+  let nodes = [];
+  const view = { age: 0, hint: 0, drawing: false, cursor: null, stingAge: null };
 
-  function readProgress() {
-    const score = value => Number.isInteger(value) ? clamp(value, 0, 3) : 0;
-    try {
-      const data = JSON.parse(localStorage.getItem(saveKey));
-      if (data && typeof data === "object" && !Array.isArray(data)) {
-        return LEVELS.map(level => score(data[level.id]));
-      }
-    } catch {
-      // Recover a readable legacy save if the current record is unavailable.
-    }
-    try {
-      const old = JSON.parse(localStorage.getItem(oldSaveKey));
-      if (Array.isArray(old)) {
-        const migrated = new Map(LEGACY_LEVELS.map((level, index) => [level.id, score(old[index])]));
-        const progress = LEVELS.map(level => migrated.get(level.id) ?? 0);
-        saveProgress(progress);
-        return progress;
-      }
-    } catch {
-      // Storage can be disabled when a local file is opened.
-    }
-    return LEVELS.map(() => 0);
+  function startMode(selected, focus) {
+    mode = selected;
+    levelIndex = Math.max(0, mode.levels.findIndex(level => !mode.best[level.id]));
+    browseChapter = mode.levels[levelIndex].chapterId;
+    byId("adventure-mode").setAttribute("aria-pressed", String(mode === adventure));
+    byId("preview-mode").setAttribute("aria-pressed", String(mode === preview));
+    groupButtons = mode.chapters.map(chapter => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "group-button";
+      button.dataset.chapter = chapter.id;
+      button.textContent = chapter.name;
+      button.addEventListener("click", () => {
+        browseChapter = chapter.id;
+        updateLevels();
+      });
+      return button;
+    });
+    ui.groups.replaceChildren(...groupButtons);
+    ui.groups.hidden = mode === preview;
+    ui.rounds.setAttribute("aria-label", mode === preview ? "丛林试玩关卡" : "选择关卡");
+    nodes = mode.levels.map((level, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = level.challenge ? "round challenge" : "round";
+      button.dataset.levelId = level.id;
+      button.addEventListener("click", () => selectLevel(index));
+      return button;
+    });
+    ui.rounds.replaceChildren(...nodes);
+    newRound(focus);
   }
 
-  function saveProgress(progress) {
+  function readProgress(key) {
+    const score = value => Number.isInteger(value) ? clamp(value, 0, 3) : 0;
     try {
-      localStorage.setItem(saveKey, JSON.stringify(Object.fromEntries(
-        LEVELS.map((level, index) => [level.id, progress[index]]),
-      )));
+      const data = JSON.parse(localStorage.getItem(key));
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        return Object.fromEntries(Object.entries(data).map(([id, value]) => [id, score(value)]));
+      }
+    } catch {
+      // Recover legacy progress when the current record is unreadable.
+    }
+    if (key === saveKey) {
+      try {
+        const old = JSON.parse(localStorage.getItem(oldSaveKey));
+        if (Array.isArray(old)) return Object.fromEntries(LEGACY_LEVELS.map((level, index) => [level.id, score(old[index])]));
+      } catch {
+        // Storage can be disabled when a local file is opened.
+      }
+    }
+    return {};
+  }
+
+  function saveProgress() {
+    try {
+      localStorage.setItem(mode.key, JSON.stringify(mode.best));
     } catch {
       // Keep playing with the in-memory progress when storage is unavailable.
     }
   }
 
   function unlocked(index) {
-    return index === best.indexOf(0) || Boolean(best[index]);
+    return mode.levels.slice(0, index).every(level => mode.best[level.id] > 0);
   }
 
   function selectLevel(index) {
-    if (!LEVELS[index] || !unlocked(index)) return;
+    if (!mode.levels[index] || !unlocked(index)) return;
     levelIndex = index;
-    browseGroup = LEVELS[index].groupIndex;
+    browseChapter = mode.levels[index].chapterId;
     newRound(true);
     field.scrollIntoView({ block: "nearest" });
   }
 
   function updateLevels() {
-    groupButtons.forEach((button, index) => {
-      button.setAttribute("aria-pressed", String(index === browseGroup));
+    groupButtons.forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.chapter === browseChapter));
     });
     nodes.forEach((button, index) => {
-      button.hidden = LEVELS[index].groupIndex !== browseGroup;
+      const level = mode.levels[index];
+      button.hidden = level.chapterId !== browseChapter;
       button.disabled = !unlocked(index);
       if (index === levelIndex) button.setAttribute("aria-current", "step");
       else button.removeAttribute("aria-current");
-      const stars = best[index];
-      const status = button.disabled ? "未解锁" : stars ? "已获得 " + stars + " 颗星" : "未通过";
-      button.setAttribute("aria-label", "第 " + (index + 1) + " 关，" + LEVELS[index].name +
-        (LEVELS[index].challenge ? "，挑战关，" : "，") + status);
-      const number = String(index + 1).padStart(2, "0");
-      const label = LEVELS[index].challenge ? number + " · 挑战关" : number;
+      const stars = mode.best[level.id] ?? 0;
+      const status = button.disabled ? (stars ? "未解锁，已保留 " + stars + " 颗星" : "未解锁") :
+        stars ? "已获得 " + stars + " 颗星" : "未通过";
+      button.setAttribute("aria-label", "第 " + level.chapterLevel + " 关，" + level.name +
+        (level.challenge ? "，挑战关，" : "，") + status);
+      const number = String(level.chapterLevel).padStart(2, "0");
+      const label = level.challenge ? number + " · 挑战关" : number;
       button.innerHTML = "<span>" + label + "</span>" +
-        (button.disabled ? lockIcon : "<small aria-hidden=\"true\">" + "★".repeat(stars) + "</small>");
+        (button.disabled && !stars ? lockIcon : '<small aria-hidden="true">' + "★".repeat(stars) + "</small>");
     });
-    const first = LEVELS.findIndex(level => level.groupIndex === browseGroup);
-    const pending = best.indexOf(0);
-    ui.groupLock.hidden = pending < 0 || pending >= first;
+    const first = mode.levels.findIndex(level => level.chapterId === browseChapter);
+    ui.groupLock.hidden = first <= 0 || unlocked(first);
     if (!ui.groupLock.hidden) {
-      ui.groupLock.textContent = best[first - 1]
-        ? "先完成第 " + (pending + 1) + " 关，继续解锁"
-        : "完成第 " + first + " 关挑战后解锁";
+      const previous = mode.chapters.find(chapter => chapter.id === mode.levels[first - 1].chapterId);
+      ui.groupLock.textContent = "通过「" + previous.name + "」的挑战关后解锁";
     }
-    const stars = best[levelIndex];
+    const stars = mode.best[round.level.id];
     byId("best").textContent = stars ? "本关最佳 " + stars + " / 3 星" : "本关尚未获得星星";
-    byId("overall").textContent = "已通过 " + best.filter(Boolean).length + " / " + LEVELS.length;
+    byId("overall").textContent = (mode === preview ? "试玩 " : "已通过 ") +
+      mode.levels.filter(level => mode.best[level.id]).length + " / " + mode.levels.length;
   }
 
   function closeResult() {
@@ -142,16 +161,20 @@
     view.hint = 0;
     view.drawing = false;
     view.cursor = null;
+    view.stingAge = null;
     lag = 0;
-    round = makeRound(LEVELS[levelIndex]);
+    round = makeRound(mode.levels[levelIndex]);
     showWaves();
     closeResult();
     ui.notice.hidden = true;
     clearTimeout(noticeTimer);
-    byId("round-number").textContent = "第 " + (levelIndex + 1) + " 关" + (round.level.challenge ? " · 挑战" : "");
+    const chapter = mode.chapters.find(entry => entry.id === round.level.chapterId);
+    byId("round-number").textContent = chapter.name + " · 第 " + round.level.chapterLevel + " 关";
     byId("round-theme").textContent = round.level.theme;
     byId("round-title").textContent = round.level.name;
     byId("round-copy").textContent = round.level.copy;
+    byId("guide-draw").textContent = round.rescue ? "画一条能借地形撑住的线" : "一笔画出防线";
+    byId("guide-release").textContent = round.level.rescue ? "松手，让墨线接住小熊" : "松手，让防线落稳";
     ui.hint.disabled = false;
     ui.wind.hidden = !round.level.wind;
     syncHint();
@@ -163,7 +186,9 @@
   function syncHint() {
     ui.hint.setAttribute("aria-pressed", String(view.hint > 0));
     ui.hint.querySelector("span").textContent = ["提示", "看路线", "隐藏"][view.hint];
-    ui.help.textContent = view.hint ? round.level.hint : "按住拖动来画线，松手后蜂群就会出发。";
+    const readyHelp = round.level.rescue?.releaseAt ? "在脚印尽头的下方画好吊床，松手让小熊出发。" :
+      round.rescue ? "借地形撑住墨线，再把线画到小熊下方。" : "按住拖动来画线，松手后蜂群就会出发。";
+    ui.help.textContent = view.hint ? round.level.hint : readyHelp;
   }
 
   function showWaves() {
@@ -213,10 +238,12 @@
     }
     if (round.level.wind) {
       const velocity = windAt(round.level, round.elapsed);
-      const direction = velocity > 4 ? "→" : velocity < -4 ? "←" : "·";
+      const reversing = round.phase === "ready" && round.level.wind.mode === "reversing";
+      const direction = reversing ? "↔" : velocity > 4 ? "→" : velocity < -4 ? "←" : "·";
       if (direction !== previousWind) {
         ui.windArrow.textContent = direction;
-        ui.wind.setAttribute("aria-label", direction === "→" ? "风向右吹" : direction === "←" ? "风向左吹" : "风暂时减弱");
+        ui.wind.setAttribute("aria-label", reversing ? "本关风向会反转" :
+          direction === "→" ? "风向右吹" : direction === "←" ? "风向左吹" : "风暂时减弱");
         previousWind = direction;
       }
     }
@@ -239,9 +266,9 @@
     if (event === "puppy" || event === "terrain" || event === "patrol") {
       view.drawing = false;
       notify({
-        puppy: "墨线碰到小狗了，从它身边重新起笔。",
+        puppy: "墨线碰到小熊了，从它身边重新起笔。",
         terrain: "沿着地形边缘画，墨线别穿过实地。",
-        patrol: "给小狗留出散步空间，沿脚印外侧画线。",
+        patrol: "给小熊留出散步空间，沿脚印外侧画线。",
       }[event]);
     }
     if (event === "dry" && round.ink === round.level.ink && ui.notice.hidden) {
@@ -266,12 +293,13 @@
     if (!launchSwarm(round)) {
       const hasLine = round.ink > 0;
       discardStroke(round);
-      if (hasLine) notify("再画长一点，才能挡住蜜蜂。");
+      if (hasLine) notify(round.rescue ? "再画长一点，让墨线能搭住地形。" : "再画长一点，才能挡住蜜蜂。");
       return;
     }
     ui.notice.hidden = true;
     ui.hint.disabled = true;
-    ui.help.textContent = "蜂群出发了，小心防线被撞歪！";
+    ui.help.textContent = round.level.rescue?.releaseAt ? "小熊正沿脚印走向断口。" :
+      round.rescue ? "接住小熊，守到倒计时归零。" : "蜂群出发了，小心防线被撞歪！";
     announce(ui.help.textContent);
     audio.effect("start");
   }
@@ -279,30 +307,39 @@
   function showResult() {
     const won = round.phase === "win";
     if (won) {
-      best[levelIndex] = Math.max(best[levelIndex], round.stars);
-      saveProgress(best);
+      mode.best[round.level.id] = Math.max(mode.best[round.level.id] ?? 0, round.stars);
+      saveProgress();
       updateLevels();
     }
-    nextLevel = won ? best.indexOf(0) : -1;
+    const rescue = Boolean(round.level.rescue);
+    nextLevel = won && mode.levels[levelIndex + 1] && unlocked(levelIndex + 1) ? levelIndex + 1 : -1;
     const finished = won && nextLevel === -1;
-    audio.effect(won ? "win" : "loss");
+    if (round.failure !== "bees") audio.effect(won ? "win" : "loss");
     const used = Math.round(round.ink / round.level.ink * 100);
     byId("result-stars").textContent = won ? "★".repeat(round.stars) + "☆".repeat(3 - round.stars) : "☆ ☆ ☆";
-    const title = won ? (finished ? "全员安全！" : "小狗安全啦！") : "蜜蜂找到缺口了";
+    const rescueLoss = {
+      water: ["小熊掉进水里了", "让墨线在支点上搭稳，给接小熊的部分留出水面余量。"],
+      spikes: ["小熊碰到尖刺了", "在木桩上多搭一截，别让墨线滑进刺沟。"],
+      lava: ["小熊碰到熔岩了", "借更高的岩沿撑住墨线，给上升的熔岩留出空间。"],
+      bees: [stingMessage, "把靠蜂巢的一侧画高些，挡住追过来的蜜蜂。"],
+      missed: ["吊床没接住小熊", "让线从小熊正下方经过。"],
+    };
+    const loss = rescueLoss[round.failure];
+    const title = won ? (finished ? "全员安全！" : "小熊安全啦！") : rescue ? loss[0] : stingMessage;
     byId("result-title").textContent = title;
     byId("result-copy").textContent = won
       ? "用了 " + used + "% 的墨水，拿到 " + round.stars + " 颗星。"
-      : "撑了 " + round.elapsed.toFixed(1) + " 秒。试试让防线靠稳地形。";
+      : "撑了 " + round.elapsed.toFixed(1) + " 秒。" + (rescue ? loss[1] : "试试让防线靠稳地形。");
     ui.retry.textContent = won ? "再画一笔" : "再试一次";
-    ui.help.textContent = won ? (finished ? "所有关卡已通过。" : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
+    ui.help.textContent = won ? (finished ? (mode === preview ? "丛林试玩五关已通过。" : "六个场景已全部通过。") : "本关通过，可以继续闯关。") : "重画防线，再试一次。";
     ui.next.hidden = nextLevel === -1;
-    const nextGroup = LEVELS[nextLevel]?.groupIndex;
+    const nextGroup = mode.levels[nextLevel]?.chapterId;
     ui.next.textContent = nextLevel === levelIndex + 1
-      ? (nextGroup === round.level.groupIndex ? "下一关 →" : "下一组 →")
+      ? (nextGroup === round.level.chapterId ? "下一关 →" : "下一章 →")
       : "继续闯关 →";
     ui.result.hidden = false;
     backgroundControls.forEach(element => { element.inert = true; });
-    announce(title);
+    if (round.failure !== "bees") announce(title);
     (ui.next.hidden ? ui.retry : ui.next).focus({ preventScroll: true });
   }
 
@@ -410,6 +447,8 @@
   ui.retry.addEventListener("click", retry);
   byId("restart").addEventListener("click", retry);
   ui.next.addEventListener("click", () => selectLevel(nextLevel));
+  byId("adventure-mode").addEventListener("click", () => { if (mode !== adventure) startMode(adventure, true); });
+  byId("preview-mode").addEventListener("click", () => { if (mode !== preview) startMode(preview, true); });
   byId("sound").addEventListener("click", () => {
     sound = audio.setEnabled(!sound);
     byId("sound").setAttribute("aria-pressed", String(sound));
@@ -437,12 +476,28 @@
     if (round.phase === "playing") {
       lag += dt;
       const bounces = round.bounces;
+      const wasReleased = round.rescue?.released;
       while (lag >= RULES.step && round.phase === "playing") {
         stepRound(round);
         lag -= RULES.step;
       }
       if (round.bounces !== bounces) audio.effect("bounce");
-      if (round.phase !== "playing") showResult();
+      if (round.level.rescue?.releaseAt && !wasReleased && round.rescue.released && round.phase === "playing") {
+        ui.help.textContent = "小熊从断口落下了，守到倒计时归零。";
+        announce(ui.help.textContent);
+      }
+      if (round.failure === "bees") {
+        view.stingAge = 0;
+        ui.help.textContent = stingMessage;
+        audio.effect("loss");
+        announce(stingMessage);
+      } else if (round.phase !== "playing") {
+        showResult();
+      }
+    }
+    if (view.stingAge !== null && ui.result.hidden) {
+      view.stingAge += dt;
+      if (view.stingAge >= stingRevealSeconds) showResult();
     }
     audio.tick();
     updateHud();
@@ -454,8 +509,14 @@
     getState: () => ({
       phase: round.phase, level: levelIndex + 1, seconds: round.time, ink: round.ink, stars: round.stars,
       levelId: round.level.id, group: round.level.groupIndex + 1,
+      mode: mode.id, chapterId: round.level.chapterId, chapterLevel: round.level.chapterLevel,
       wave: activeWave + 1, waveTimes: round.waves.map(wave => wave.at),
-      result: ["win", "loss"].includes(round.phase) ? round.phase : null, best: [...best],
+      result: ["win", "loss"].includes(round.phase) ? round.phase : null, failure: round.failure,
+      best: LEVELS.map(level => adventure.best[level.id] ?? 0),
+      rescueBest: adventure.best[RESCUE_LEVELS[0].id] ?? 0,
+      rescueProgress: RESCUE_LEVELS.map(level => adventure.best[level.id] ?? 0),
+      campaignProgress: CAMPAIGN_LEVELS.map(level => adventure.best[level.id] ?? 0),
+      previewProgress: JUNGLE_PREVIEW.map(level => preview.best[level.id] ?? 0),
       selfId: "local", players: { local: { connected: true, x: 0, z: 0 } },
     }),
     getStats: () => {
@@ -467,6 +528,8 @@
         dogs: round.dogs.map(({x, y}) => ({x, y})),
         platforms: round.platforms.map(({x, y}) => ({x, y})),
         shield: body && { x: body.x, y: body.y, angle: body.angle },
+        hammock: round.rescue ? { supports: rescueSupports(round), caught: round.rescue.caught, released: round.rescue.released } : null,
+        hazard: round.rescue ? { kind: round.level.rescue.hazard.kind, y: rescueHazardY(round) } : null,
       };
     },
     sendAction(action) {
@@ -487,7 +550,7 @@
     runSelfTests: runEngineChecks,
   };
 
-  newRound(false);
+  startMode(adventure, false);
   resizeCanvas();
   new ResizeObserver(resizeCanvas).observe(field);
   requestAnimationFrame(loop);

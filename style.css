@@ -26,7 +26,6 @@ button:focus-visible, canvas:focus-visible { outline: 3px solid #98601d; outline
 .intro { gap: 16px; margin-block: 22px 25px; }
 h1, h2, h3, p { margin: 0; }
 h1 { font-size: clamp(37px, 5.7vw, 65px); font-weight: 900; line-height: 1.1; letter-spacing: -.055em; }
-.title-dot { color: var(--gold); margin-left: .07em; }
 .intro p { margin-top: 10px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .overall { display: flex; align-items: center; gap: 7px; flex: none; padding: 9px 13px; border-radius: 99px; background: var(--sage); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .overall-mark { font-size: 16px; color: #45684e; }
@@ -72,7 +71,8 @@ canvas:focus-visible { outline-offset: -4px; }
 .side p { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.75; }
 .divider { border-top: 1px solid var(--line); margin-block: 16px; }
 .side h3 { font-size: 13px; font-weight: 800; }
-.groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 9px; }
+.campaign-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 9px; }
+.groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 9px; }
 .group-button { min-height: 42px; padding: 0 4px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 750; }
 .group-button:hover, .group-button[aria-pressed="true"] { background: var(--sage); color: var(--ink); }
 .side .group-lock { margin-top: 7px; font-size: 11px; }
@@ -90,7 +90,7 @@ canvas:focus-visible { outline-offset: -4px; }
 .guide { background: #e8eddf; }
 .guide ol { display: grid; gap: 7px; padding: 0; margin: 10px 0 0; list-style: none; font-size: 12px; }
 .guide li { display: flex; align-items: center; gap: 8px; }
-.guide li span { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #d7e2cc; font-size: 10px; font-weight: bold; }
+.guide li span[aria-hidden] { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #d7e2cc; font-size: 10px; font-weight: bold; }
 .guide p { margin-top: 10px; font-size: 12px; }
 .notice { position: absolute; z-index: 2; inset: auto 12px 13px; width: fit-content; max-width: calc(100% - 24px); margin-inline: auto; padding: 8px 12px; border-radius: 8px; background: var(--ink); color: var(--card); font-size: 12px; text-align: center; pointer-events: none; }
 .result-scrim { display: grid; position: absolute; z-index: 3; inset: 0; place-items: center; padding: 9px; background: #293b3a66; }
@@ -118,7 +118,6 @@ canvas:focus-visible { outline-offset: -4px; }
   .overall { font-size: 11px; padding: 6px 8px; gap: 4px; }
   .layout { display: block; }
   .side { margin-top: 13px; grid-template-columns: minmax(0, 1fr); }
-  .groups { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .side h2 { font-size: 21px; margin-top: 8px; }
   .side p { margin-top: 5px; }
   .hud { inset: 8px 8px auto; }
@@ -133,6 +132,11 @@ canvas:focus-visible { outline-offset: -4px; }
   .tool, .primary, .round, .group-button { min-height: 44px; }
 }
 @media (max-width: 350px) {
+  .masthead { gap: 8px; }
+  .brand { min-width: 0; gap: 8px; font-size: 12px; letter-spacing: .04em; }
+  .brand-mark, .sound { flex-shrink: 0; }
+  .brand > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .sound { padding-inline: 8px; }
   .intro { display: block; }
   .overall { display: none; }
   .tools .tool { padding-inline: 8px; }
